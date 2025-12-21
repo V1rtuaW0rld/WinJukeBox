@@ -1,4 +1,4 @@
-"sqlite3.exe
-jukebox.db
+mpv.exe
+sqlite3.exe
+*.db
 *.mp3
-*.exe" | Out-File -Encoding ascii .gitignore
