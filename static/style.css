@@ -1,0 +1,25 @@
+body { background: #121212; color: white; font-family: sans-serif; }
+.song-card { background: #1e1e1e; padding: 15px; margin: 10px; border-radius: 8px; display: flex; justify-content: space-between; }
+.play-btn { background: #1db954; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; }
+input { width: 90%; padding: 10px; margin: 20px; border-radius: 20px; border: none; }
+
+.controls-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 10px;
+}
+
+#searchInput {
+    flex-grow: 1; /* Prend toute la place */
+}
+
+.volume-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.1);
+    padding: 5px 15px;
+    border-radius: 20px;
+}

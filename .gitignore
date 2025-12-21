@@ -1,0 +1,4 @@
+"sqlite3.exe
+jukebox.db
+*.mp3
+*.exe" | Out-File -Encoding ascii .gitignore

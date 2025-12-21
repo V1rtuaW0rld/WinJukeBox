@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jukebox Jabra</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+    <h1>Mon Jukebox</h1>
+    <div class="controls-top">
+        <input type="text" id="searchInput" placeholder="Rechercher un titre ou artiste..." oninput="doSearch()">
+        
+        <div class="volume-container">
+            <span>🔊</span>
+            <input type="range" id="volumeSlider" min="0" max="100" value="70" onchange="updateVolume(this.value)">
+        </div>
+    </div>
+</header>
+
+<main id="songList">
+    <div style="padding: 20px; text-align: center;">Chargement de la bibliothèque...</div>
+</main>
+
+<footer>
+    <button class="stop-btn" onclick="stopMusic()">ARRÊTER TOUT</button>
+</footer>
+
+<script src="/static/app.js"></script>
+
+</body>
+</html>
