@@ -8,15 +8,27 @@
 </head>
 <body>
 
-<header>
-    <h1>Mon Jukebox</h1>
-    <div class="controls-top">
-        <input type="text" id="searchInput" placeholder="Rechercher un titre ou artiste..." oninput="doSearch()">
-        
-        <div class="volume-container">
-            <span>🔊</span>
-            <input type="range" id="volumeSlider" min="0" max="100" value="70" onchange="updateVolume(this.value)">
+<header class="jukebox-header">
+    <div class="header-left">
+        <input type="text" id="searchInput" placeholder="Rechercher..." oninput="doSearch()">
+    </div>
+
+    <div class="header-center">
+        <div class="player-controls">
+            <button onclick="seek(-10)">⏪</button>
+            <button onclick="togglePause()" id="pauseBtn">⏸</button>
+            <button onclick="seek(10)">⏩</button>
         </div>
+        <div class="progress-zone">
+            <span id="currentTime">0:00</span>
+            <input type="range" id="progressSlider" value="0" min="0" max="100">
+            <span id="totalTime">0:00</span>
+        </div>
+    </div>
+
+    <div class="header-right">
+        <span>🔊</span>
+        <input type="range" id="volumeSlider" min="0" max="100" value="70" oninput="changeVolume(this.value)">
     </div>
 </header>
 

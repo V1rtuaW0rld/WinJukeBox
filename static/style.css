@@ -1,18 +1,95 @@
-body { background: #121212; color: white; font-family: sans-serif; }
-.song-card { background: #1e1e1e; padding: 15px; margin: 10px; border-radius: 8px; display: flex; justify-content: space-between; }
-.play-btn { background: #1db954; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; }
-input { width: 90%; padding: 10px; margin: 20px; border-radius: 20px; border: none; }
+/* --- BASE & TYPO --- */
+body { 
+    background: #121212; 
+    color: white; 
+    font-family: 'Segoe UI', sans-serif; 
+    margin: 0; 
+}
 
-.controls-top {
+/* --- LEADER / TOP BAR (L'alignement horizontal 2025) --- */
+.jukebox-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 15px;
-    padding: 10px;
+    background: #000000;
+    padding: 10px 25px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    border-bottom: 1px solid #282828;
+    gap: 20px;
+    height: 70px; /* Hauteur fixe pour éviter les sauts */
+    box-sizing: border-box;
 }
 
-#searchInput {
-    flex-grow: 1; /* Prend toute la place */
+/* 1. Recherche (Gauche) - Environ 20% */
+.header-left { flex: 1; }
+.header-left input {
+    width: 100%;
+    max-width: 250px;
+    padding: 8px 15px;
+    border-radius: 20px;
+    border: none;
+    background: #242424;
+    color: white;
+}
+
+/* 2. Lecteur (Centre) - Environ 60% */
+.header-center {
+    flex: 2;
+    display: flex;
+    align-items: center;
+    gap: 20px; /* Espace entre boutons et barre */
+    justify-content: center;
+}
+
+.player-controls {
+    display: flex;
+    align-items: center;
+}
+
+.player-controls button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    margin: 0 8px;
+}
+
+#pauseBtn {
+    background: white;
+    color: black;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    font-weight: bold;
+}
+
+.progress-zone {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-grow: 1;
+    max-width: 400px;
+}
+
+.progress-zone span { font-size: 0.75rem; color: #b3b3b3; min-width: 35px; }
+
+#progressSlider {
+    flex-grow: 1;
+    height: 4px;
+    accent-color: #1db954;
+    cursor: pointer;
+}
+
+/* 3. Volume (Droite) - Environ 20% */
+.header-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
 .volume-container {
@@ -20,6 +97,45 @@ input { width: 90%; padding: 10px; margin: 20px; border-radius: 20px; border: no
     align-items: center;
     gap: 10px;
     background: rgba(255,255,255,0.1);
-    padding: 5px 15px;
+    padding: 5px 12px;
     border-radius: 20px;
+}
+
+#volumeSlider {
+    width: 100px;
+    accent-color: #1db954;
+    cursor: pointer;
+}
+
+/* --- LISTE DES MORCEAUX --- */
+#songsList { padding: 20px; max-width: 1000px; margin: 0 auto; }
+.song-card {
+    background: #181818;
+    padding: 12px 20px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.play-btn {
+    background: #1db954;
+    border: none;
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    cursor: pointer;
+    /* LE SECRET DU CENTRAGE : */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0; 
+    color: black;
+    font-size: 14px;
+}
+
+/* On s'assure que l'icône ne bouge pas */
+.play-btn span {
+    display: block;
+    line-height: 0;
 }

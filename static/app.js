@@ -72,6 +72,27 @@ async function updateVolume(level) {
     await fetch(`/volume/${level}`);
 }
 
+// --- LOGIQUE DU LECTEUR ---
+
+async function togglePause() {
+    await fetch('/pause');
+    // On change l'icône visuellement pour un retour immédiat
+    const btn = document.getElementById('pauseBtn');
+    btn.innerText = (btn.innerText === "⏸") ? "▶" : "⏸";
+}
+
+async function seek(seconds) {
+    await fetch(`/seek/${seconds}`);
+}
+
+// Fonction pour le volume (déjà fonctionnelle chez toi, mais on s'assure de l'appel)
+async function changeVolume(level) {
+    await fetch(`/volume/${level}`);
+}
+
+// Pour éviter que la barre de recherche ne soit trop large, 
+// on a utilisé grid-template-columns: 1fr 2fr 1fr;
+
 /**
  * EXPOSITION GLOBALE ET INITIALISATION
  * Indispensable pour que le HTML (onclick) puisse trouver les fonctions.

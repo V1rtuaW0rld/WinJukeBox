@@ -47,8 +47,9 @@ def search_songs(q: str = ""):
 
 @app.get("/play/{song_id}")
 def play_song(song_id: int):
-    # Tue l'instance précédente
-    subprocess.run(["taskkill", "/F", "/IM", "mpv.exe"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    # 1. On tue proprement toute instance précédente
+    # On ajoute || exit 0 pour éviter que l'erreur "processus non trouvé" ne bloque tout
+    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
     
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -58,15 +59,23 @@ def play_song(song_id: int):
 
     if res:
         file_path = res[0]
-        # Lancement avec le pipe IPC
+        # 2. Arguments optimisés pour le mode "Invisible"
         args = [
-            MPV_PATH, file_path,
-            "--no-video",
+            MPV_PATH, 
+            file_path,
+            "--no-video",            # Pas de fenêtre vidéo
+            "--force-window=no",     # Pas de fenêtre du tout
+            "--no-terminal",         # Pas de sortie console
             f"--audio-device={DEVICE_ID}",
             f"--input-ipc-server={IPC_PIPE}",
-            "--really-quiet"
+            "--volume=70"            # Volume initial par sécurité
         ]
-        subprocess.Popen(args, creationflags=subprocess.CREATE_NO_WINDOW)
+        
+        # 3. Le code magique 0x08000000 (CREATE_NO_WINDOW)
+        # On utilise Popen pour ne pas attendre que la musique finisse pour répondre au navigateur
+        subprocess.Popen(args, creationflags=0x08000000)
+        
+        print(f"Lecture lancée : {file_path}")
         return {"status": "playing"}
     return {"status": "error"}
 
@@ -80,6 +89,25 @@ def set_volume(level: int):
 def stop():
     subprocess.run(["taskkill", "/F", "/IM", "mpv.exe"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
     return {"status": "stopped"}
+
+@app.get("/pause")
+def toggle_pause():
+    # 'cycle pause' bascule entre lecture et pause
+    run_mpv_command(["cycle", "pause"])
+    return {"status": "toggled"}
+
+@app.get("/seek/{seconds}")
+def seek_time(seconds: int):
+    # Avance ou recule de X secondes
+    run_mpv_command(["seek", seconds])
+    return {"status": "moved"}
+
+@app.get("/status")
+def get_status():
+    # Pour l'instant on renvoie des valeurs fictives pour ne pas faire d'erreur
+    # On connectera la lecture réelle du temps juste après
+    return {"pos": 0, "duration": 0, "paused": False}
+
 
 # Montage des fichiers statiques
 app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
