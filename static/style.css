@@ -57,14 +57,76 @@ body {
     margin: 0 8px;
 }
 
-#pauseBtn {
-    background: white;
-    color: black;
-    width: 35px;
-    height: 35px;
-    border-radius: 50%;
-    font-weight: bold;
+/* --- SECTION LECTEUR CENTRAL (NETTOYÉE) --- */
+
+/* Conteneur des boutons (Précédent, Pause, Suivant) */
+.player-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
 }
+
+/* Boutons Précédent et Suivant (Icônes bleues sur fond noir) */
+.player-controls button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- SECTION LECTEUR CENTRAL --- */
+
+.player-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.player-controls button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- LE BOUTON CENTRAL (Affiche tes images directement) --- */
+#pauseBtn {
+    width: 50px;
+    height: 50px;
+    background-color: transparent; /* On enlève le blanc du CSS */
+    border: none;
+    cursor: pointer;
+    
+    /* Configuration pour afficher l'image PNG entière */
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain; /* L'image remplira tout le bouton */
+    
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* État PLAY : Affiche ton play.png (Rond noir + Triangle) */
+#pauseBtn.playing {
+    background-image: url('/static/icons/play.png') !important;
+}
+
+/* État PAUSE : Affiche ton pause.png (Rond noir + Barres) */
+#pauseBtn.paused {
+    background-image: url('/static/icons/pause.png') !important;
+}
+/* Effet tactile pour mobile */
+#pauseBtn:active {
+    transform: scale(0.9);
+}
+/* --- LE RESTE DU CSS (PROGESSION & LISTE) --- */
 
 .progress-zone {
     display: flex;

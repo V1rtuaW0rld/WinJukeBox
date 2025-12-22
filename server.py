@@ -4,10 +4,21 @@ import sqlite3
 import uvicorn
 import json
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles  # <--- IL MANQUAIT CETTE LIGNE
 from fastapi.responses import FileResponse
 
+# 1. Création de l'application
 app = FastAPI()
+
+# 2. Configuration CORS (Indispensable pour l'accès réseau)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -113,4 +124,6 @@ def get_status():
 app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
 
 if __name__ == "__main__":
+    import uvicorn
+    # host="0.0.0.0" permet d'écouter sur TOUTES les interfaces (WiFi, Ethernet, Localhost)
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -107,3 +107,58 @@ window.doSearch = doSearch;
 // Dès que la page est totalement chargée, on lance une première recherche (vide)
 // pour afficher tous les morceaux par défaut.
 window.onload = doSearch;
+
+// Barre de temps
+
+const btn = document.getElementById('pauseBtn');
+if (data.paused) {
+    btn.className = 'playing'; // MPV en pause -> on montre le bouton PLAY
+} else {
+    btn.className = 'paused';  // MPV joue -> on montre le bouton PAUSE
+}
+
+// Fonction pour transformer les secondes en format 0:00
+function formatTime(seconds) {
+    if (!seconds) return "0:00";
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
+    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+}
+
+async function updateStatus() {
+    try {
+        const response = await fetch('/status');
+        const data = await response.json();
+
+        if (data.duration > 0) {
+            const slider = document.getElementById('progressSlider');
+            const currentTxt = document.getElementById('currentTime');
+            const totalTxt = document.getElementById('totalTime');
+            const btn = document.getElementById('pauseBtn');
+
+            // 1. On fait bouger le curseur vert
+            slider.max = Math.floor(data.duration);
+            slider.value = Math.floor(data.pos);
+
+            // 2. On met à jour les chiffres du temps
+            currentTxt.innerText = formatTime(data.pos);
+            totalTxt.innerText = formatTime(data.duration);
+
+            // 3. On synchronise l'icône du bouton
+            if (data.paused) {
+                btn.className = 'playing'; // Affiche Play si MPV est en pause
+            } else {
+                btn.className = 'paused';  // Affiche Pause si la musique joue
+            }
+        }
+    } catch (e) { console.error("Erreur de synchro"); }
+}
+
+// Lancement automatique toutes les secondes
+setInterval(updateStatus, 1000);
+
+document.getElementById('progressSlider').addEventListener('input', async (e) => {
+    const newPos = e.target.value;
+    await fetch(`/seek?pos=${newPos}`);
+});
+
