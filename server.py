@@ -3,15 +3,16 @@ import os
 import sqlite3
 import uvicorn
 import json
+import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles  # <--- IL MANQUAIT CETTE LIGNE
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 # 1. Création de l'application
 app = FastAPI()
 
-# 2. Configuration CORS (Indispensable pour l'accès réseau)
+# 2. Configuration CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,12 +32,20 @@ IPC_PIPE = r"\\.\pipe\mpv-juke"
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
     payload = json.dumps({"command": command_list})
-    # Commande simplifiée pour Windows
     cmd = f'echo {payload} > {IPC_PIPE}'
+    subprocess.run(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+
+def read_mpv_property(prop):
+    """Lit une propriété MPV via IPC JSON"""
     try:
-        subprocess.run(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-    except Exception as e:
-        print(f"Erreur IPC: {e}")
+        with open(IPC_PIPE, "r+b", buffering=0) as pipe:
+            cmd = json.dumps({"command": ["get_property", prop]}) + "\n"
+            pipe.write(cmd.encode("utf-8"))
+            response = pipe.readline().decode("utf-8").strip()
+            data = json.loads(response)
+            return data.get("data", None)
+    except:
+        return None
 
 # --- ROUTES ---
 
@@ -48,7 +57,6 @@ def read_index():
 def search_songs(q: str = ""):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    # On remet bien la requête SQL
     query = "SELECT id, title, artist FROM tracks WHERE title LIKE ? OR artist LIKE ? ORDER BY title ASC"
     term = f"%{q}%"
     cur.execute(query, (term, term))
@@ -58,8 +66,6 @@ def search_songs(q: str = ""):
 
 @app.get("/play/{song_id}")
 def play_song(song_id: int):
-    # 1. On tue proprement toute instance précédente
-    # On ajoute || exit 0 pour éviter que l'erreur "processus non trouvé" ne bloque tout
     subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
     
     conn = sqlite3.connect(DB_NAME)
@@ -70,29 +76,22 @@ def play_song(song_id: int):
 
     if res:
         file_path = res[0]
-        # 2. Arguments optimisés pour le mode "Invisible"
         args = [
             MPV_PATH, 
             file_path,
-            "--no-video",            # Pas de fenêtre vidéo
-            "--force-window=no",     # Pas de fenêtre du tout
-            "--no-terminal",         # Pas de sortie console
+            "--no-video",
+            "--force-window=no",
+            "--no-terminal",
             f"--audio-device={DEVICE_ID}",
             f"--input-ipc-server={IPC_PIPE}",
-            "--volume=70"            # Volume initial par sécurité
+            "--volume=70"
         ]
-        
-        # 3. Le code magique 0x08000000 (CREATE_NO_WINDOW)
-        # On utilise Popen pour ne pas attendre que la musique finisse pour répondre au navigateur
         subprocess.Popen(args, creationflags=0x08000000)
-        
-        print(f"Lecture lancée : {file_path}")
         return {"status": "playing"}
     return {"status": "error"}
 
 @app.get("/volume/{level}")
 def set_volume(level: int):
-    print(f"Réglage volume IPC: {level}")
     run_mpv_command(["set_property", "volume", int(level)])
     return {"volume": level}
 
@@ -103,27 +102,28 @@ def stop():
 
 @app.get("/pause")
 def toggle_pause():
-    # 'cycle pause' bascule entre lecture et pause
     run_mpv_command(["cycle", "pause"])
     return {"status": "toggled"}
 
 @app.get("/seek/{seconds}")
 def seek_time(seconds: int):
-    # Avance ou recule de X secondes
     run_mpv_command(["seek", seconds])
     return {"status": "moved"}
 
+@app.get("/setpos/{position}")
+def set_position(position: int):
+    run_mpv_command(["set_property", "time-pos", int(position)])
+    return {"status": "set"}
+
 @app.get("/status")
 def get_status():
-    # Pour l'instant on renvoie des valeurs fictives pour ne pas faire d'erreur
-    # On connectera la lecture réelle du temps juste après
-    return {"pos": 0, "duration": 0, "paused": False}
-
+    pos = read_mpv_property("time-pos") or 0
+    duration = read_mpv_property("duration") or 0
+    paused = read_mpv_property("pause") or False
+    return {"pos": pos, "duration": duration, "paused": paused}
 
 # Montage des fichiers statiques
 app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
 
 if __name__ == "__main__":
-    import uvicorn
-    # host="0.0.0.0" permet d'écouter sur TOUTES les interfaces (WiFi, Ethernet, Localhost)
     uvicorn.run(app, host="0.0.0.0", port=8000)
