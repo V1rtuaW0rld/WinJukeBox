@@ -83,22 +83,38 @@ function formatTime(seconds) {
 
 /**
  * ---------------------------------------------------------
- *  BARRE DE PROGRESSION
+ *  BARRE DE PROGRESSION (Desktop + Mobile)
  * ---------------------------------------------------------
  */
 let isDragging = false;
 const slider = document.getElementById("progressSlider");
 
+// --- Début du drag (desktop + mobile)
 slider.addEventListener("mousedown", () => {
     isDragging = true;
 });
+slider.addEventListener("touchstart", () => {
+    isDragging = true;
+});
 
+// --- Fin du drag (desktop)
 slider.addEventListener("mouseup", async (e) => {
     isDragging = false;
     const newPos = Number(e.target.value);
     await fetch(`/setpos/${newPos}`);
 });
 
+// --- Fin du drag (mobile)
+slider.addEventListener("touchend", async (e) => {
+    isDragging = false;
+    const newPos = Number(slider.value); // sur mobile, e.target.value est parfois vide
+    await fetch(`/setpos/${newPos}`);
+
+    // Laisse MPV mettre à jour avant la prochaine synchro
+    setTimeout(updateStatus, 300);
+});
+
+// --- Mise à jour visuelle pendant le drag
 slider.addEventListener("input", (e) => {
     const currentTxt = document.getElementById("currentTime");
     currentTxt.innerText = formatTime(Number(e.target.value));
