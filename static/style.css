@@ -1,32 +1,54 @@
-/* --- BASE & TYPO --- */
-body { 
-    background: #121212; 
-    color: white; 
-    font-family: 'Segoe UI', sans-serif; 
-    margin: 0; 
+/* === BASE & TYPOGRAPHIE === */
+body {
+    background: #121212;
+    color: white;
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
 }
 
-/* --- LEADER / TOP BAR (L'alignement horizontal 2025) --- */
+/* === HEADER RESPONSIVE === */
 .jukebox-header {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap; /* Permet le passage à la ligne */
     justify-content: space-between;
-    background: #000000;
-    padding: 10px 25px;
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    border-bottom: 1px solid #282828;
+    align-items: center;
     gap: 20px;
-    height: 70px; /* Hauteur fixe pour éviter les sauts */
+    padding: 10px 25px 15px; /* padding-bottom intégré */
+    background: #000;
+    border-bottom: 1px solid #282828;
     box-sizing: border-box;
+    max-width: 1200px; /* Centrage sur grands écrans */
+    margin: 0 auto;
 }
 
-/* 1. Recherche (Gauche) - Environ 20% */
-.header-left { flex: 1; }
+/* Chaque zone prend environ 22–24% sur grand écran */
+.header-left,
+.header-controls,
+.header-progress,
+.header-right {
+    flex: 1 1 22%;
+    min-width: 200px; /* Empêche l’écrasement */
+}
+
+/* Sur petit écran : les zones passent en colonne */
+@media (max-width: 768px) {
+    .jukebox-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .header-left,
+    .header-controls,
+    .header-progress,
+    .header-right {
+        flex: 1 1 100%;
+        min-width: auto;
+    }
+}
+
+/* === ZONE DE RECHERCHE === */
 .header-left input {
     width: 100%;
-    max-width: 250px;
     padding: 8px 15px;
     border-radius: 20px;
     border: none;
@@ -34,55 +56,12 @@ body {
     color: white;
 }
 
-/* 2. Lecteur (Centre) - Environ 60% */
-.header-center {
-    flex: 2;
-    display: flex;
-    align-items: center;
-    gap: 20px; /* Espace entre boutons et barre */
-    justify-content: center;
-}
-
+/* === ZONE CENTRALE : LECTEUR === */
 .player-controls {
-    display: flex;
-    align-items: center;
-}
-
-.player-controls button {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.2rem;
-    cursor: pointer;
-    margin: 0 8px;
-}
-
-/* --- SECTION LECTEUR CENTRAL (NETTOYÉE) --- */
-
-/* Conteneur des boutons (Précédent, Pause, Suivant) */
-.player-controls {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-/* Boutons Précédent et Suivant (Icônes bleues sur fond noir) */
-.player-controls button {
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-/* --- SECTION LECTEUR CENTRAL --- */
-
-.player-controls {
-    display: flex;
-    align-items: center;
-    gap: 15px;
+    gap: 0px;
 }
 
 .player-controls button {
@@ -95,39 +74,62 @@ body {
     justify-content: center;
 }
 
-/* --- LE BOUTON CENTRAL (Affiche tes images directement) --- */
+/* === BOUTON CENTRAL PLAY/PAUSE === */
 #pauseBtn {
     width: 50px;
     height: 50px;
-    background-color: transparent; /* On enlève le blanc du CSS */
+    background-color: transparent;
     border: none;
     cursor: pointer;
-    
-    /* Configuration pour afficher l'image PNG entière */
     background-repeat: no-repeat;
     background-position: center;
-    background-size: contain; /* L'image remplira tout le bouton */
-    
+    background-size: contain;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-/* État PLAY : Affiche ton play.png (Rond noir + Triangle) */
 #pauseBtn.playing {
     background-image: url('/static/icons/play.png') !important;
 }
 
-/* État PAUSE : Affiche ton pause.png (Rond noir + Barres) */
 #pauseBtn.paused {
     background-image: url('/static/icons/pause.png') !important;
+    background-size: 75% !important;
 }
-/* Effet tactile pour mobile */
+
 #pauseBtn:active {
     transform: scale(0.9);
 }
-/* --- LE RESTE DU CSS (PROGESSION & LISTE) --- */
 
+/* === BOUTONS REWIND & FORWARD === */
+#rewindBtn,
+#forwardBtn {
+    width: 20px;
+    height: 20px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+}
+
+#rewindBtn {
+    background-image: url('/static/icons/rewind.png');
+}
+
+#forwardBtn {
+    background-image: url('/static/icons/forward.png');
+}
+
+#rewindBtn:active,
+#forwardBtn:active {
+    transform: scale(0.9);
+    filter: brightness(1.2);
+}
+
+/* === BARRE DE PROGRESSION === */
 .progress-zone {
     display: flex;
     align-items: center;
@@ -136,7 +138,11 @@ body {
     max-width: 400px;
 }
 
-.progress-zone span { font-size: 0.75rem; color: #b3b3b3; min-width: 35px; }
+.progress-zone span {
+    font-size: 0.75rem;
+    color: #b3b3b3;
+    min-width: 35px;
+}
 
 #progressSlider {
     flex-grow: 1;
@@ -145,22 +151,12 @@ body {
     cursor: pointer;
 }
 
-/* 3. Volume (Droite) - Environ 20% */
+/* === ZONE VOLUME === */
 .header-right {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 10px;
-}
-
-.volume-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(255,255,255,0.1);
-    padding: 5px 12px;
-    border-radius: 20px;
 }
 
 #volumeSlider {
@@ -169,8 +165,13 @@ body {
     cursor: pointer;
 }
 
-/* --- LISTE DES MORCEAUX --- */
-#songsList { padding: 20px; max-width: 1000px; margin: 0 auto; }
+/* === LISTE DES MORCEAUX === */
+#songsList {
+    padding: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
 .song-card {
     background: #181818;
     padding: 12px 20px;
@@ -180,6 +181,7 @@ body {
     justify-content: space-between;
     align-items: center;
 }
+
 .play-btn {
     background: #1db954;
     border: none;
@@ -187,16 +189,14 @@ body {
     width: 38px;
     height: 38px;
     cursor: pointer;
-    /* LE SECRET DU CENTRAGE : */
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0; 
+    padding: 0;
     color: black;
     font-size: 14px;
 }
 
-/* On s'assure que l'icône ne bouge pas */
 .play-btn span {
     display: block;
     line-height: 0;

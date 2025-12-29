@@ -9,16 +9,22 @@
 <body>
 
 <header class="jukebox-header">
+    <!-- Zone 1 : Barre de recherche -->
     <div class="header-left">
         <input type="text" id="searchInput" placeholder="Rechercher..." oninput="doSearch()">
     </div>
 
-    <div class="header-center">
+    <!-- Zone 2 : Boutons ⏪ ▶ ⏩ -->
+    <div class="header-controls">
         <div class="player-controls">
-            <button onclick="seek(-10)">⏪</button>
-            <button onclick="togglePause()" id="pauseBtn">⏸</button>
-            <button onclick="seek(10)">⏩</button>
+            <button onclick="seek(-10)" id="rewindBtn"></button>
+            <button onclick="togglePause()" id="pauseBtn"></button>
+            <button onclick="seek(10)" id="forwardBtn"></button>
         </div>
+    </div>
+
+    <!-- Zone 3 : Barre de progression -->
+    <div class="header-progress">
         <div class="progress-zone">
             <span id="currentTime">0:00</span>
             <input type="range" id="progressSlider" value="0" min="0" max="100">
@@ -26,11 +32,13 @@
         </div>
     </div>
 
+    <!-- Zone 4 : Volume -->
     <div class="header-right">
         <span>🔊</span>
         <input type="range" id="volumeSlider" min="0" max="100" value="70" oninput="changeVolume(this.value)">
     </div>
 </header>
+
 
 <main id="songList">
     <div style="padding: 20px; text-align: center;">Chargement de la bibliothèque...</div>
