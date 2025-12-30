@@ -2,10 +2,11 @@
  * ---------------------------------------------------------
  *  RECHERCHE ET AFFICHAGE DES MORCEAUX
  * ---------------------------------------------------------
+ * Utilise l'endpoint /search de server.py
  */
 async function doSearch() {
     try {
-        const query = document.getElementById("searchInput").value;
+        const query = document.getElementById("searchInput").value || "";
         const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
         if (!response.ok) throw new Error("Erreur serveur");
 
@@ -29,7 +30,15 @@ async function doSearch() {
                     <strong>${song.title}</strong><br>
                     <small style="color:#b3b3b3">${song.artist}</small>
                 </div>
-                <button class="play-btn" onclick="play(${song.id})">▶</button>
+                <div class="song-actions">
+                    <button class="play-btn" data-id="${song.id}">▶</button>
+                    <button
+                        class="add-to-playlist-btn"
+                        data-id="${song.id}"
+                        data-title="${song.title.replace(/"/g, '&quot;')}"
+                        data-artist="${song.artist.replace(/"/g, '&quot;')}"
+                    >➕</button>
+                </div>
             `;
 
             list.appendChild(card);
@@ -46,7 +55,7 @@ async function doSearch() {
 
 /**
  * ---------------------------------------------------------
- *  COMMANDES SERVEUR
+ *  COMMANDES SERVEUR (COHÉRENTES AVEC server.py)
  * ---------------------------------------------------------
  */
 async function play(id) {
@@ -83,42 +92,42 @@ function formatTime(seconds) {
 
 /**
  * ---------------------------------------------------------
- *  BARRE DE PROGRESSION (Desktop + Mobile)
+ *  BARRE DE PROGRESSION
  * ---------------------------------------------------------
  */
 let isDragging = false;
-const slider = document.getElementById("progressSlider");
+let slider = null;
 
-// --- Début du drag (desktop + mobile)
-slider.addEventListener("mousedown", () => {
-    isDragging = true;
-});
-slider.addEventListener("touchstart", () => {
-    isDragging = true;
-});
+function initProgressBar() {
+    slider = document.getElementById("progressSlider");
+    if (!slider) return;
 
-// --- Fin du drag (desktop)
-slider.addEventListener("mouseup", async (e) => {
-    isDragging = false;
-    const newPos = Number(e.target.value);
-    await fetch(`/setpos/${newPos}`);
-});
+    slider.addEventListener("mousedown", () => {
+        isDragging = true;
+    });
 
-// --- Fin du drag (mobile)
-slider.addEventListener("touchend", async (e) => {
-    isDragging = false;
-    const newPos = Number(slider.value); // sur mobile, e.target.value est parfois vide
-    await fetch(`/setpos/${newPos}`);
+    slider.addEventListener("touchstart", () => {
+        isDragging = true;
+    });
 
-    // Laisse MPV mettre à jour avant la prochaine synchro
-    setTimeout(updateStatus, 300);
-});
+    slider.addEventListener("mouseup", async (e) => {
+        isDragging = false;
+        const newPos = Number(e.target.value);
+        await fetch(`/setpos/${newPos}`);
+    });
 
-// --- Mise à jour visuelle pendant le drag
-slider.addEventListener("input", (e) => {
-    const currentTxt = document.getElementById("currentTime");
-    currentTxt.innerText = formatTime(Number(e.target.value));
-});
+    slider.addEventListener("touchend", async () => {
+        isDragging = false;
+        const newPos = Number(slider.value);
+        await fetch(`/setpos/${newPos}`);
+        setTimeout(updateStatus, 300);
+    });
+
+    slider.addEventListener("input", (e) => {
+        const currentTxt = document.getElementById("currentTime");
+        currentTxt.innerText = formatTime(Number(e.target.value));
+    });
+}
 
 /**
  * ---------------------------------------------------------
@@ -128,11 +137,17 @@ slider.addEventListener("input", (e) => {
 async function updateStatus() {
     try {
         const response = await fetch(`/status`);
+        if (!response.ok) return;
         const data = await response.json();
 
         const currentTxt = document.getElementById("currentTime");
         const totalTxt = document.getElementById("totalTime");
         const btn = document.getElementById("pauseBtn");
+
+        if (!slider) {
+            slider = document.getElementById("progressSlider");
+            if (!slider) return;
+        }
 
         if (data.duration > 0) {
             slider.max = Math.floor(data.duration);
@@ -140,8 +155,8 @@ async function updateStatus() {
         }
 
         if (!isDragging) {
-            slider.value = Math.floor(data.pos);
-            currentTxt.innerText = formatTime(data.pos);
+            slider.value = Math.floor(data.pos || 0);
+            currentTxt.innerText = formatTime(data.pos || 0);
         }
 
         if (data.paused) {
@@ -161,7 +176,96 @@ setInterval(updateStatus, 1000);
 
 /**
  * ---------------------------------------------------------
- *  EXPOSITION GLOBALE
+ *  PLAYLIST (LOCALSTORAGE + PANNEAU SLIDE-IN)
+ * ---------------------------------------------------------
+ */
+let playlist = [];
+
+function loadPlaylistFromStorage() {
+    try {
+        const raw = localStorage.getItem("playlist");
+        playlist = raw ? JSON.parse(raw) : [];
+    } catch {
+        playlist = [];
+    }
+}
+
+function savePlaylistToStorage() {
+    localStorage.setItem("playlist", JSON.stringify(playlist));
+}
+
+function refreshPlaylistUI() {
+    const ul = document.getElementById("playlistItems");
+    if (!ul) return;
+
+    ul.innerHTML = "";
+    playlist.forEach((song, index) => {
+        const li = document.createElement("li");
+        li.textContent = `${song.title} — ${song.artist}`;
+        li.dataset.index = index;
+        ul.appendChild(li);
+    });
+}
+
+function addToPlaylistFromElement(target) {
+    const id = Number(target.dataset.id);
+    const title = target.dataset.title || "";
+    const artist = target.dataset.artist || "";
+
+    const song = { id, title, artist };
+    playlist.push(song);
+    savePlaylistToStorage();
+    refreshPlaylistUI();
+}
+
+function initPlaylistPanel() {
+    const playlistPanel = document.getElementById("playlistPanel");
+    const openPlaylistBtn = document.getElementById("openPlaylistBtn");
+    const playPlaylistBtn = document.getElementById("playPlaylistBtn");
+
+    if (openPlaylistBtn && playlistPanel) {
+        openPlaylistBtn.addEventListener("click", () => {
+            playlistPanel.classList.toggle("open");
+        });
+    }
+
+    if (playPlaylistBtn) {
+        playPlaylistBtn.addEventListener("click", () => {
+            if (playlist.length > 0) {
+                play(playlist[0].id);
+            }
+        });
+    }
+
+    // Click sur les boutons ➕ (délégation)
+    document.addEventListener("click", (e) => {
+        if (e.target && e.target.classList.contains("add-to-playlist-btn")) {
+            addToPlaylistFromElement(e.target);
+        }
+        if (e.target && e.target.classList.contains("play-btn")) {
+            const id = Number(e.target.dataset.id);
+            if (id) play(id);
+        }
+    });
+
+    loadPlaylistFromStorage();
+    refreshPlaylistUI();
+}
+
+/**
+ * ---------------------------------------------------------
+ *  INITIALISATION GLOBALE
+ * ---------------------------------------------------------
+ */
+window.addEventListener("load", () => {
+    initProgressBar();
+    initPlaylistPanel();
+    doSearch();
+});
+
+/**
+ * ---------------------------------------------------------
+ *  EXPOSITION GLOBALE (pour les attributs onclick HTML)
  * ---------------------------------------------------------
  */
 window.play = play;
@@ -170,5 +274,3 @@ window.doSearch = doSearch;
 window.changeVolume = changeVolume;
 window.togglePause = togglePause;
 window.seek = seek;
-
-window.onload = doSearch;

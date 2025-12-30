@@ -202,3 +202,69 @@ body {
     display: block;
     line-height: 0;
 }
+
+/* === PANNEAU PLAYLIST (SLIDE-IN) === */
+.playlist-btn {
+    background: #1db954;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    color: black;
+    font-weight: bold;
+}
+
+.playlist-panel {
+    position: fixed;
+    top: 0;
+    right: -300px; /* caché */
+    width: 300px;
+    height: 100%;
+    background: #181818;
+    border-left: 1px solid #333;
+    padding: 20px;
+    box-sizing: border-box;
+    transition: right 0.3s ease;
+    z-index: 2000;
+}
+
+.playlist-panel.open {
+    right: 0;
+}
+
+.playlist-panel h2 {
+    margin-top: 0;
+}
+
+#playlistItems {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+}
+
+#playlistItems li {
+    padding: 10px;
+    background: #242424;
+    margin-bottom: 8px;
+    border-radius: 4px;
+}
+
+.play-all-btn {
+    width: 100%;
+    background: #1db954;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: black;
+    font-weight: bold;
+}
+
+.add-to-playlist-btn {
+    background: #1db954;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 8px;
+    cursor: pointer;
+    color: black;
+}

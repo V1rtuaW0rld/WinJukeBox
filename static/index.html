@@ -9,6 +9,7 @@
 <body>
 
 <header class="jukebox-header">
+
     <!-- Zone 1 : Barre de recherche -->
     <div class="header-left">
         <input type="text" id="searchInput" placeholder="Rechercher..." oninput="doSearch()">
@@ -32,13 +33,21 @@
         </div>
     </div>
 
-    <!-- Zone 4 : Volume -->
+    <!-- Zone 4 : Playlist + Volume -->
     <div class="header-right">
+        <button id="openPlaylistBtn" class="playlist-btn">🎵</button>
         <span>🔊</span>
         <input type="range" id="volumeSlider" min="0" max="100" value="70" oninput="changeVolume(this.value)">
     </div>
+
 </header>
 
+<!-- Panneau latéral de playlist -->
+<div id="playlistPanel" class="playlist-panel">
+    <h2>Playlist</h2>
+    <ul id="playlistItems"></ul>
+    <button id="playPlaylistBtn" class="play-all-btn">Lire la playlist</button>
+</div>
 
 <main id="songList">
     <div style="padding: 20px; text-align: center;">Chargement de la bibliothèque...</div>
