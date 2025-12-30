@@ -343,3 +343,66 @@ body {
     justify-content: center;
 }
 
+#playlistItems {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.playlist-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px;
+}
+
+.playlist-text {
+    flex: 1;
+    cursor: pointer;
+}
+
+.remove-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+}
+/* === POUBELLE playlist === */
+.remove-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: white; 
+}
+.remove-btn:hover {
+    color: #ff4444;
+}
+.playlist-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 8px;
+}
+
+.playlist-actions button {
+    font-size: 18px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: white;
+}
+
+.playlist-actions button:hover {
+    color: #ff4444;
+}
+/* === Bouton Shuffle === */
+#shufflePlaylistBtn.inactive {
+    filter: brightness(0.7);
+}
+
+#shufflePlaylistBtn.active {
+    filter: brightness(1.6);
+}
+

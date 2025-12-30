@@ -59,6 +59,7 @@ async function doSearch() {
  * ---------------------------------------------------------
  */
 async function play(id) {
+    currentTrackId = id;
     await fetch(`/play/${id}`);
 }
 
@@ -176,86 +177,240 @@ setInterval(updateStatus, 1000);
 
 /**
  * ---------------------------------------------------------
- *  PLAYLIST (LOCALSTORAGE + PANNEAU SLIDE-IN)
+ *  PLAYLIST (SQLITE + PANNEAU SLIDE-IN + ENCHAÎNEMENT)
  * ---------------------------------------------------------
  */
-let playlist = [];
 
-function loadPlaylistFromStorage() {
+let playlist = [];
+let currentPlaylistIndex = -1;
+let isPlaylistMode = false;
+let currentTrackId = null; // morceau actuellement joué
+
+/* Charger la playlist depuis le serveur */
+async function loadPlaylistFromServer() {
     try {
-        const raw = localStorage.getItem("playlist");
-        playlist = raw ? JSON.parse(raw) : [];
-    } catch {
-        playlist = [];
+        const res = await fetch("/playlist");
+        const data = await res.json();
+        playlist = data.songs || [];
+        refreshPlaylistUI();
+    } catch (e) {
+        console.warn("Erreur de chargement de la playlist", e);
     }
 }
 
-function savePlaylistToStorage() {
-    localStorage.setItem("playlist", JSON.stringify(playlist));
+/* Ajouter une chanson à la playlist */
+async function addToPlaylistFromElement(target) {
+    const id = Number(target.dataset.id);
+    if (!id) return;
+
+    await fetch(`/playlist/add/${id}`, { method: "POST" });
+    loadPlaylistFromServer();
 }
 
+/* Supprimer une chanson de la playlist */
+async function removeFromPlaylist(id) {
+    await fetch(`/playlist/remove/${id}`, { method: "DELETE" });
+    loadPlaylistFromServer();
+}
+
+/* Rafraîchir l'affichage du panneau playlist */
 function refreshPlaylistUI() {
     const ul = document.getElementById("playlistItems");
     if (!ul) return;
 
     ul.innerHTML = "";
+
     playlist.forEach((song, index) => {
         const li = document.createElement("li");
-        li.textContent = `${song.title} — ${song.artist}`;
-        li.dataset.index = index;
+        li.classList.add("playlist-item");
+
+    // Zone texte cliquable
+    const textSpan = document.createElement("span");
+    textSpan.textContent = `${song.title} — ${song.artist}`;
+    textSpan.classList.add("playlist-text");
+    
+    textSpan.addEventListener("click", () => {
+        const index = playlist.findIndex(s => s.id === song.id);
+        if (index !== -1) {
+            isPlaylistMode = true;
+            currentPlaylistIndex = index;
+            play(song.id);
+        }
+    });
+
+
+        // Bouton corbeille
+        const trashBtn = document.createElement("button");
+        trashBtn.textContent = "🗑";
+        trashBtn.classList.add("remove-btn");
+        trashBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            removeFromPlaylist(song.id);
+        });
+
+        li.appendChild(textSpan);
+        li.appendChild(trashBtn);
         ul.appendChild(li);
     });
 }
 
-function addToPlaylistFromElement(target) {
-    const id = Number(target.dataset.id);
-    const title = target.dataset.title || "";
-    const artist = target.dataset.artist || "";
+/* Enchaînement automatique des chansons */
+function startPlaylistWatcher() {
+    setInterval(async () => {
+        if (!isPlaylistMode || playlist.length === 0) return;
 
-    const song = { id, title, artist };
-    playlist.push(song);
-    savePlaylistToStorage();
-    refreshPlaylistUI();
+        try {
+            const res = await fetch("/status");
+            const data = await res.json();
+
+            const pos = Number(data.pos || 0);
+            const duration = Number(data.duration || 0);
+
+            if (duration > 0 && pos >= duration - 1.5) {
+        try {
+            const resNext = await fetch(`/next?current_id=${currentTrackId || 0}`);
+            const nextData = await resNext.json();
+	    
+            if (nextData && nextData.id) {
+                isPlaylistMode = true; // on reste en mode playlist/shuffle
+                await play(nextData.id);
+            } else {
+                // plus de morceau à lire
+                isPlaylistMode = false;
+                currentPlaylistIndex = -1;
+            }
+    } catch (e) {
+        console.warn("Erreur /next", e);
+    }
 }
 
+        } catch (e) {
+            console.warn("Erreur de polling /status", e);
+        }
+    }, 1000);
+}
+
+/* Initialisation du panneau playlist */
 function initPlaylistPanel() {
     const playlistPanel = document.getElementById("playlistPanel");
     const openPlaylistBtn = document.getElementById("openPlaylistBtn");
     const closePlaylistBtn = document.getElementById("closePlaylistBtn");
     const playPlaylistBtn = document.getElementById("playPlaylistBtn");
-    // Ouvrir / fermer via le bouton 🎵
+	const shufflePlaylistBtn = document.getElementById("shufflePlaylistBtn");
+
     if (openPlaylistBtn && playlistPanel) {
         openPlaylistBtn.addEventListener("click", () => {
             playlistPanel.classList.toggle("open");
         });
     }
-    // Fermer via le bouton ❌
+
     if (closePlaylistBtn && playlistPanel) {
         closePlaylistBtn.addEventListener("click", () => {
             playlistPanel.classList.remove("open");
         });
     }
-    // Lire la playlist
+
     if (playPlaylistBtn) {
         playPlaylistBtn.addEventListener("click", () => {
             if (playlist.length > 0) {
+                isPlaylistMode = true;
+                currentPlaylistIndex = 0;
                 play(playlist[0].id);
             }
         });
     }
-    // Click sur les boutons ➕ (délégation)
+	
+    if (shufflePlaylistBtn) {
+        shufflePlaylistBtn.addEventListener("click", () => {
+            toggleShuffle();
+        });
+    }	
+
+	
+
     document.addEventListener("click", (e) => {
         if (e.target && e.target.classList.contains("add-to-playlist-btn")) {
             addToPlaylistFromElement(e.target);
         }
         if (e.target && e.target.classList.contains("play-btn")) {
             const id = Number(e.target.dataset.id);
-            if (id) play(id);
+            if (id) {
+                isPlaylistMode = false;
+                play(id);
+            }
         }
     });
-    loadPlaylistFromStorage();
-    refreshPlaylistUI();
+
+    loadPlaylistFromServer();
+    startPlaylistWatcher();
+	refreshShuffleStatus();
 }
+
+
+
+/* Ajout des helpers shuffle */
+let shuffleActive = false;
+
+async function refreshShuffleStatus() {
+    try {
+        const res = await fetch("/shuffle/status");
+        const data = await res.json();
+        shuffleActive = !!data.shuffle;
+        updateShuffleButton();
+    } catch (e) {
+        console.warn("Erreur /shuffle/status", e);
+    }
+}
+
+function updateShuffleButton() {
+    const btn = document.getElementById("shufflePlaylistBtn");
+    if (!btn) return;
+    btn.classList.toggle("active", shuffleActive);
+    btn.classList.toggle("inactive", !shuffleActive);
+}
+
+async function enableShuffle() {
+    try {
+        const res = await fetch("/shuffle/enable", { method: "POST" });
+        const data = await res.json();
+        shuffleActive = true;
+        isPlaylistMode = true;        // on lit en mode "playlist"
+        currentPlaylistIndex = -1;    // index local n'a plus de sens en shuffle
+        updateShuffleButton();
+    } catch (e) {
+        console.warn("Erreur /shuffle/enable", e);
+    }
+}
+
+async function disableShuffle() {
+    try {
+        await fetch("/shuffle/disable", { method: "POST" });
+        shuffleActive = false;
+        updateShuffleButton();
+    } catch (e) {
+        console.warn("Erreur /shuffle/disable", e);
+    }
+}
+
+async function toggleShuffle() {
+    if (shuffleActive) {
+        await disableShuffle();
+    } else {
+        await enableShuffle();
+    }
+}
+
+
+/* Bouton action en bas du panneau playlist */
+const clearPlaylistBtn = document.getElementById("clearPlaylistBtn");
+
+if (clearPlaylistBtn) {
+    clearPlaylistBtn.addEventListener("click", async () => {
+        await fetch("/playlist/clear", { method: "DELETE" });
+        loadPlaylistFromServer();
+    });
+}
+
 
 /**
  * ---------------------------------------------------------

@@ -4,6 +4,7 @@ import sqlite3
 import uvicorn
 import json
 import time
+import random
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +29,7 @@ DB_NAME = os.path.join(BASE_DIR, "jukebox.db")
 STATIC_PATH = os.path.join(BASE_DIR, "static")
 DEVICE_ID = "wasapi/Headphones (AUKEY BR-C16)"
 IPC_PIPE = r"\\.\pipe\mpv-juke"
+shuffle_mode = False  # True = on lit shuffled_playlist, False = playlist normale
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -121,6 +123,178 @@ def get_status():
     duration = read_mpv_property("duration") or 0
     paused = read_mpv_property("pause") or False
     return {"pos": pos, "duration": duration, "paused": paused}
+
+# --- PLAYLIST ---
+@app.post("/playlist/add/{track_id}")
+def add_to_playlist(track_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    # Trouver la prochaine position
+    cur.execute("SELECT COALESCE(MAX(position), 0) + 1 FROM playlist")
+    pos = cur.fetchone()[0]
+
+    # Insérer seulement track_id + position
+    cur.execute("INSERT INTO playlist (track_id, position) VALUES (?, ?)", (track_id, pos))
+    conn.commit()
+
+    conn.close()
+    return {"status": "added"}
+
+
+@app.get("/playlist")
+def get_playlist():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT playlist.track_id, tracks.title, tracks.artist
+        FROM playlist
+        JOIN tracks ON playlist.track_id = tracks.id
+        ORDER BY playlist.position ASC
+    """)
+
+    songs = cur.fetchall()
+    conn.close()
+
+    return {"songs": [{"id": s[0], "title": s[1], "artist": s[2]} for s in songs]}
+
+
+@app.delete("/playlist/remove/{track_id}")
+def remove_from_playlist(track_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM playlist WHERE track_id = ?", (track_id,))
+    conn.commit()
+    conn.close()
+
+    return {"status": "removed"}
+
+# --- VIDER la PLAYLIST ---
+@app.delete("/playlist/clear")
+def clear_playlist():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM playlist")
+    conn.commit()
+    conn.close()
+    return {"status": "cleared"}
+
+# --- SHUFFLE ---
+# ACTIVER
+@app.post("/shuffle/enable")
+def enable_shuffle():
+    global shuffle_mode
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    # On récupère la playlist actuelle dans l'ordre
+    cur.execute("SELECT track_id FROM playlist ORDER BY position ASC")
+    rows = cur.fetchall()
+    track_ids = [r[0] for r in rows]
+
+    # On vide la shuffled_playlist
+    cur.execute("DELETE FROM shuffled_playlist")
+
+    if track_ids:
+        # Mélange sans remise
+        random.shuffle(track_ids)
+        # On réinsère avec une position 1..N
+        for idx, tid in enumerate(track_ids, start=1):
+            cur.execute(
+                "INSERT INTO shuffled_playlist (track_id, position) VALUES (?, ?)",
+                (tid, idx),
+            )
+
+    conn.commit()
+    conn.close()
+
+    shuffle_mode = True
+    return {"status": "enabled", "count": len(track_ids)}
+
+# DESACTIVER
+@app.post("/shuffle/disable")
+def disable_shuffle():
+    global shuffle_mode
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM shuffled_playlist")
+    conn.commit()
+    conn.close()
+
+    shuffle_mode = False
+    return {"status": "disabled"}
+
+#SHUFFLE Status
+@app.get("/shuffle/status")
+def shuffle_status():
+    return {"shuffle": shuffle_mode}
+
+
+# Route pour obtenir la prochaine chanson
+from fastapi import Query
+
+@app.get("/next")
+def get_next(current_id: int = Query(0)):
+    """
+    Renvoie la prochaine chanson à jouer.
+    - Si shuffle_mode = True : lit dans shuffled_playlist
+    - Sinon : lit dans playlist
+    current_id = id de la chanson en cours (0 si aucune)
+    """
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    global shuffle_mode
+
+    if shuffle_mode:
+        table = "shuffled_playlist"
+    else:
+        table = "playlist"
+
+    # Si aucune chanson en cours, on renvoie la première
+    if current_id == 0:
+        cur.execute(f"""
+            SELECT {table}.track_id
+            FROM {table}
+            ORDER BY {table}.position ASC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return {"id": row[0]}
+        return {"id": None}
+
+    # On cherche la position de la chanson actuelle
+    cur.execute(f"""
+        SELECT position FROM {table}
+        WHERE track_id = ?
+    """, (current_id,))
+    res = cur.fetchone()
+
+    if not res:
+        conn.close()
+        return {"id": None}
+
+    current_pos = res[0]
+
+    # On cherche la suivante
+    cur.execute(f"""
+        SELECT track_id
+        FROM {table}
+        WHERE position > ?
+        ORDER BY position ASC
+        LIMIT 1
+    """, (current_pos,))
+    next_row = cur.fetchone()
+    conn.close()
+
+    if next_row:
+        return {"id": next_row[0]}
+    else:
+        return {"id": None}
 
 # Montage des fichiers statiques
 app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
