@@ -24,6 +24,11 @@
         </div>
     </div>
 
+    <!-- ⭐ Zone 2.5 : Bouton Playlist -->
+    <div class="header-playlist">
+        <button id="openPlaylistBtn" class="playlist-btn">🎵</button>
+    </div>
+
     <!-- Zone 3 : Barre de progression -->
     <div class="header-progress">
         <div class="progress-zone">
@@ -33,18 +38,21 @@
         </div>
     </div>
 
-    <!-- Zone 4 : Playlist + Volume -->
+    <!-- Zone 4 : Volume -->
     <div class="header-right">
-        <button id="openPlaylistBtn" class="playlist-btn">🎵</button>
         <span>🔊</span>
         <input type="range" id="volumeSlider" min="0" max="100" value="70" oninput="changeVolume(this.value)">
     </div>
 
 </header>
 
+
 <!-- Panneau latéral de playlist -->
 <div id="playlistPanel" class="playlist-panel">
-    <h2>Playlist</h2>
+    <div class="playlist-header">
+        <h2>Playlist</h2>
+        <button id="closePlaylistBtn" class="close-playlist-btn">❌</button>
+    </div>
     <ul id="playlistItems"></ul>
     <button id="playPlaylistBtn" class="play-all-btn">Lire la playlist</button>
 </div>

@@ -26,7 +26,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MPV_PATH = os.path.join(BASE_DIR, "mpv.exe")
 DB_NAME = os.path.join(BASE_DIR, "jukebox.db")
 STATIC_PATH = os.path.join(BASE_DIR, "static")
-DEVICE_ID = "wasapi/Speakers (Jabra SPEAK 510 USB)"
+DEVICE_ID = "wasapi/Headphones (AUKEY BR-C16)"
 IPC_PIPE = r"\\.\pipe\mpv-juke"
 
 def run_mpv_command(command_list):

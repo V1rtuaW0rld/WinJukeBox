@@ -31,13 +31,13 @@ async function doSearch() {
                     <small style="color:#b3b3b3">${song.artist}</small>
                 </div>
                 <div class="song-actions">
-                    <button class="play-btn" data-id="${song.id}">▶</button>
                     <button
                         class="add-to-playlist-btn"
                         data-id="${song.id}"
                         data-title="${song.title.replace(/"/g, '&quot;')}"
                         data-artist="${song.artist.replace(/"/g, '&quot;')}"
                     >➕</button>
+                    <button class="play-btn" data-id="${song.id}">▶</button>
                 </div>
             `;
 
@@ -221,14 +221,21 @@ function addToPlaylistFromElement(target) {
 function initPlaylistPanel() {
     const playlistPanel = document.getElementById("playlistPanel");
     const openPlaylistBtn = document.getElementById("openPlaylistBtn");
+    const closePlaylistBtn = document.getElementById("closePlaylistBtn");
     const playPlaylistBtn = document.getElementById("playPlaylistBtn");
-
+    // Ouvrir / fermer via le bouton 🎵
     if (openPlaylistBtn && playlistPanel) {
         openPlaylistBtn.addEventListener("click", () => {
             playlistPanel.classList.toggle("open");
         });
     }
-
+    // Fermer via le bouton ❌
+    if (closePlaylistBtn && playlistPanel) {
+        closePlaylistBtn.addEventListener("click", () => {
+            playlistPanel.classList.remove("open");
+        });
+    }
+    // Lire la playlist
     if (playPlaylistBtn) {
         playPlaylistBtn.addEventListener("click", () => {
             if (playlist.length > 0) {
@@ -236,7 +243,6 @@ function initPlaylistPanel() {
             }
         });
     }
-
     // Click sur les boutons ➕ (délégation)
     document.addEventListener("click", (e) => {
         if (e.target && e.target.classList.contains("add-to-playlist-btn")) {
@@ -247,7 +253,6 @@ function initPlaylistPanel() {
             if (id) play(id);
         }
     });
-
     loadPlaylistFromStorage();
     refreshPlaylistUI();
 }

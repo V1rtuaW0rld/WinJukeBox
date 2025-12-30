@@ -25,11 +25,13 @@ body {
 /* Chaque zone prend environ 22–24% sur grand écran */
 .header-left,
 .header-controls,
+.header-playlist,
 .header-progress,
 .header-right {
-    flex: 1 1 22%;
-    min-width: 200px; /* Empêche l’écrasement */
+    flex: 1 1 18%;
+    min-width: 120px;
 }
+
 
 /* Sur petit écran : les zones passent en colonne */
 @media (max-width: 768px) {
@@ -40,12 +42,15 @@ body {
 
     .header-left,
     .header-controls,
+    .header-playlist,
     .header-progress,
     .header-right {
         flex: 1 1 100%;
         min-width: auto;
     }
 }
+
+
 
 /* === ZONE DE RECHERCHE === */
 .header-left input {
@@ -74,6 +79,30 @@ body {
     align-items: center;
     justify-content: center;
 }
+
+.player-controls .playlist-btn {
+    all: unset;
+    background: #1db954;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    color: black;
+    font-weight: bold;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 8px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.player-controls .playlist-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 5px rgba(29, 185, 84, 0.5);
+}
+
 
 /* === BOUTON CENTRAL PLAY/PAUSE === */
 #pauseBtn {
@@ -204,15 +233,47 @@ body {
 }
 
 /* === PANNEAU PLAYLIST (SLIDE-IN) === */
+.playlist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.close-playlist-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #ccc;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.close-playlist-btn:hover {
+    color: white;
+}
 .playlist-btn {
     background: #1db954;
     border: none;
-    padding: 8px 15px;
+    padding: 8px 16px;
     border-radius: 20px;
     cursor: pointer;
     color: black;
     font-weight: bold;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 8px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+
+.playlist-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 5px rgba(29, 185, 84, 0.5);
+}
+
+
 
 .playlist-panel {
     position: fixed;
@@ -268,3 +329,17 @@ body {
     cursor: pointer;
     color: black;
 }
+
+.song-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.header-playlist {
+    flex: 0 0 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
