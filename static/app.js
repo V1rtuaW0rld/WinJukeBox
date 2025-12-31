@@ -245,6 +245,9 @@ let currentPlaylistIndex = -1;
 let isPlaylistMode = false;
 let currentTrackId = null; // morceau actuellement joué
 
+
+
+
 /* Charger la playlist depuis le serveur */
 async function loadPlaylistFromServer() {
     try {

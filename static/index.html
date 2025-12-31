@@ -7,25 +7,26 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-
+<div class="header-wrapper">
 <header class="jukebox-header">
-<div class="now-playing-bar">
-    <div id="currentTrackInfo">
-        <span class="now-playing-label">EN ÉCOUTE :</span>
-        <span id="trackTitle">---</span> 
-        <span class="separator">—</span> 
-        <span id="trackArtist">---</span>
-        <span class="separator">—</span> 
-        <span id="trackAlbum">---</span>
+
+    <div class="now-playing-bar">
+        <div id="currentTrackInfo">
+            <span class="now-playing-label">EN ÉCOUTE :</span>
+            <span id="trackTitle">---</span> 
+            <span class="separator">—</span> 
+            <span id="trackArtist">---</span>
+            <span class="separator">—</span> 
+            <span id="trackAlbum">---</span>
+        </div>
     </div>
-</div>
-</div>
+  
     <!-- Zone 1 : Barre de recherche -->
     <div class="header-left">
         <input type="text" id="searchInput" placeholder="Rechercher..." oninput="doSearch()">
     </div>
 
-    <!-- Zone 2 : Boutons ⏮️ ⏪ ▶ ⏩ ⏭️ -->
+    <!-- Zone 2 : Boutons -->
     <div class="header-controls">
         <div class="player-controls">
             <button onclick="playPrevious()" id="prevBtn" title="Précédent"></button>
@@ -36,8 +37,7 @@
         </div>
     </div>
 
-
-    <!-- ⭐ Zone 2.5 : Bouton Playlist -->
+    <!-- Zone 2.5 : Bouton Playlist -->
     <div class="header-playlist">
         <button id="openPlaylistBtn" class="playlist-btn">🎵</button>
     </div>
@@ -58,6 +58,7 @@
     </div>
 
 </header>
+</div>
 
 
 <!-- Panneau latéral de playlist -->
@@ -66,7 +67,11 @@
         <h2>Playlist</h2>
         <button id="closePlaylistBtn" class="close-playlist-btn">❌</button>
     </div>
-    <ul id="playlistItems"></ul>
+	
+    <div class="playlist-scroll-zone">
+    <ul id="playlistItems">...</ul>
+    </div>
+
     <div class="playlist-actions">
     <button id="playPlaylistBtn" title="Lire la playlist">▶️</button>
     <button id="shufflePlaylistBtn" title="Lecture aléatoire">🔀</button>

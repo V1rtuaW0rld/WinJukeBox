@@ -1,3 +1,4 @@
+
 /* === BASE & TYPOGRAPHIE === */
 body {
     background: #121212;
@@ -7,20 +8,27 @@ body {
 }
 
 /* === HEADER RESPONSIVE === */
+.header-wrapper {
+    position: sticky;
+    top: 0;
+    z-index: 3000;
+    background: #000;
+    border-bottom: 1px solid #282828;
+}
+
 .jukebox-header {
     display: flex;
-    flex-wrap: wrap; /* Permet le passage à la ligne */
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     gap: 20px;
-    padding: 10px 25px 15px; /* padding-bottom intégré */
-    background: #000;
-    border-bottom: 1px solid #282828;
+    padding: 10px 25px 15px;
     box-sizing: border-box;
-    max-width: 1200px; /* Centrage sur grands écrans */
+    max-width: 1200px;
     margin: 0 auto;
     width: 100%;
 }
+
 
 /* Chaque zone prend environ 22–24% sur grand écran */
 .header-left,
@@ -301,29 +309,45 @@ body {
     box-shadow: 0 0 5px rgba(29, 185, 84, 0.5);
 }
 
-
+/* === PANNEAU PLAYLIST (SLIDE-IN + SCROLL) === */
 
 .playlist-panel {
+	z-index: 4000;
     position: fixed;
     top: 0;
-    right: -300px; /* caché */
+    right: -300px; /* caché par défaut */
     width: 300px;
-    height: 100%;
+    height: 100vh;
     background: #181818;
     border-left: 1px solid #333;
     padding: 20px;
     box-sizing: border-box;
     transition: right 0.3s ease;
-    z-index: 2000;
+    
+
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* empêche le débordement interne */
 }
 
 .playlist-panel.open {
     right: 0;
 }
 
+.playlist-scroll-zone {
+    flex: 1;
+    overflow-y: auto;
+    margin: 10px 0;
+    padding-right: 4px;
+
+    overscroll-behavior: contain; /* ⭐ empêche le scroll de sortir */
+}
+
+
 .playlist-panel h2 {
     margin-top: 0;
 }
+
 
 #playlistItems {
     list-style: none;
