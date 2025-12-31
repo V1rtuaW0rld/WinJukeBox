@@ -538,7 +538,7 @@ body {
     font-weight: bold;
 }
 
-#Selectionner le device
+/* Selectionner le device */
 /* 1. LE CONTENEUR (Le fond noir) */
 .modal {
     display: none; /* Changé en 'flex' par le JS */
@@ -581,7 +581,7 @@ body {
     padding-right: 5px;
 }
 
-/* 3. LES ITEMS DE LA LISTE (pour que ce soit joli) */
+/* 4. LES ITEMS DE LA LISTE (pour que ce soit joli) */
 .device-item {
     padding: 15px;
     margin: 10px 0;
