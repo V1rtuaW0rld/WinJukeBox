@@ -41,11 +41,14 @@ body {
 }
 
 
-/* Sur petit écran : les zones passent en colonne */
+/* Sur petit écran : header compact et resserré */
 @media (max-width: 768px) {
+
     .jukebox-header {
         flex-direction: column;
         align-items: stretch;
+        gap: 6px;              /* 🔥 Resserre l’espace entre les blocs */
+        padding: 6px 12px;     /* 🔥 Réduit le padding global */
     }
 
     .header-left,
@@ -56,7 +59,44 @@ body {
         flex: 1 1 100%;
         min-width: auto;
     }
+
+    /* 🔥 Compactage interne des éléments */
+    .header-left input {
+        padding: 6px 10px;
+    }
+
+    .player-controls {
+        gap: 4px;
+    }
+
+    .playlist-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+
+    #pauseBtn {
+        width: 42px;
+        height: 42px;
+    }
+
+    #prevBtn,
+    #nextBtn,
+    #rewindBtn,
+    #forwardBtn {
+        width: 18px;
+        height: 18px;
+    }
+
+    .progress-zone {
+        gap: 6px;
+    }
+
+    .now-playing-bar {
+        padding: 4px 0;
+        font-size: 0.85rem;
+    }
 }
+
 
 
 
@@ -315,8 +355,8 @@ body {
 	z-index: 4000;
     position: fixed;
     top: 0;
-    right: -300px; /* caché par défaut */
-    width: 300px;
+    right: -400px; /* caché par défaut */
+    width: 400px;
     height: 100vh;
     background: #181818;
     border-left: 1px solid #333;
@@ -494,6 +534,72 @@ body {
 }
 
 .playlist-item.playing-now .playlist-text {
+    color: #1db954;
+    font-weight: bold;
+}
+
+#Selectionner le device
+/* 1. LE CONTENEUR (Le fond noir) */
+.modal {
+    display: none; /* Changé en 'flex' par le JS */
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    
+    /* On force le centrage des deux axes */
+    justify-content: center;
+    align-items: center;
+}
+
+/* 2. LA BOÎTE (Le menu) */
+.modal-content {
+    background-color: #181818;
+    padding: 25px;
+    border: 1px solid #333;
+    width: 90%;
+    max-width: 450px;
+    border-radius: 12px;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+    
+    /* Sécurité supplémentaire pour le centrage */
+    margin: auto; 
+    
+    display: flex;
+    flex-direction: column;
+    max-height: 85vh;
+}
+
+/* 3. LA LISTE INTERNE (Pour scroller à l'intérieur de la boîte) */
+#deviceList {
+    overflow-y: auto;    /* Ajoute un scroll si la liste est longue */
+    margin: 15px 0;
+    padding-right: 5px;
+}
+
+/* 3. LES ITEMS DE LA LISTE (pour que ce soit joli) */
+.device-item {
+    padding: 15px;
+    margin: 10px 0;
+    background: #282828;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.device-item:hover {
+    background: #333;
+    border-color: #1db954;
+}
+
+.device-item.active {
+    background: #1db95422;
+    border-color: #1db954;
     color: #1db954;
     font-weight: bold;
 }

@@ -31,6 +31,8 @@ DEVICE_ID = "wasapi/Headphones (AUKEY BR-C16)"
 IPC_PIPE = r"\\.\pipe\mpv-juke"
 shuffle_mode = False  # True = on lit shuffled_playlist, False = playlist normale
 current_playing_id = None
+# Configuration Audio par défaut
+DEVICE_ID = "auto" # Valeur de secours
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -67,18 +69,41 @@ def search_songs(q: str = ""):
     conn.close()
     return {"songs": [{"id": s[0], "title": s[1], "artist": s[2]} for s in songs]}
 
+
+@app.get("/audio-devices")
+def get_audio_devices():
+    """Récupère la liste des noms 'FriendlyName' des sorties audio actives via PowerShell."""
+    cmd = 'powershell "Get-PnpDevice -Class AudioEndpoint -Status OK | Select-Object FriendlyName | ConvertTo-Json"'
+    try:
+        result = subprocess.check_output(cmd, shell=True).decode('utf-8')
+        if not result.strip():
+            return {"devices": []}
+            
+        data = json.loads(result)
+        # Gestion du cas où il n'y a qu'un seul périphérique (objet vs liste)
+        devices = [d['FriendlyName'] for d in (data if isinstance(data, list) else [data])]
+        return {"devices": devices}
+    except Exception as e:
+        print(f"Erreur audio-devices: {e}")
+        return {"error": str(e), "devices": []}
+
 @app.get("/play/{song_id}")
-def play_song(song_id: int):
-    global current_playing_id
-    current_playing_id = song_id 
+def play_song(song_id: int, device: str = None):
+    """Lance la lecture d'un morceau sur un périphérique spécifique."""
+    global current_playing_id, DEVICE_ID
     
-    # 1. Tuer toutes les instances MPV
+    # 1. Mise à jour de l'état global
+    current_playing_id = song_id
+    
+    # 2. Détermination du périphérique (Priorité au paramètre URL, sinon global)
+    # On utilise 'device' s'il est fourni, sinon la variable DEVICE_ID
+    target_device = device if device else DEVICE_ID
+
+    # 3. Arrêt propre des instances précédentes
     subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
+    time.sleep(0.4) # Temps de latence pour libérer le fichier et le driver audio
 
-    # 2. Laisser le temps au système de terminer le kill
-    time.sleep(0.4)  # ← essentiel pour éviter les MPV fantômes
-
-    # 3. Récupérer le chemin du fichier
+    # 4. Recherche du fichier en BDD
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute("SELECT path FROM tracks WHERE id = ?", (song_id,))
@@ -93,16 +118,16 @@ def play_song(song_id: int):
             "--no-video",
             "--force-window=no",
             "--no-terminal",
-            f"--audio-device={DEVICE_ID}",
+            f"--audio-device={target_device}", # Utilisation du device dynamique
             f"--input-ipc-server={IPC_PIPE}",
             "--volume=70"
         ]
 
-        # 4. Lancer MPV proprement
+        # 5. Lancement de MPV (sans fenêtre terminale)
         subprocess.Popen(args, creationflags=0x08000000)
-        return {"status": "playing"}
+        return {"status": "playing", "device_used": target_device}
     
-    return {"status": "error"}
+    return {"status": "error", "message": "Song not found"}
 
 
 @app.get("/volume/{level}")

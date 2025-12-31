@@ -55,31 +55,29 @@ async function doSearch() {
 
 /**
  * ---------------------------------------------------------
- *  COMMANDES SERVEUR (COHÉRENTES AVEC server.py)
+ * COMMANDES SERVEUR & GESTION AUDIO DYNAMIQUE
  * ---------------------------------------------------------
  */
 let isLaunching = false;
+// On récupère le dernier device utilisé ou "auto" par défaut
+let selectedDevice = localStorage.getItem("selectedAudioDevice") || "auto";
 
 async function play(id) {
     if (isLaunching) return;
     isLaunching = true;
 
     currentTrackId = id;
-    await fetch(`/play/${id}`);
+    
+    // On encode le device pour gérer les espaces et caractères spéciaux du FriendlyName
+    const deviceParam = encodeURIComponent(selectedDevice);
+    await fetch(`/play/${id}?device=${deviceParam}`);
 
     setTimeout(() => {
         isLaunching = false;
-    }, 500); // délai pour éviter les doublons
+    }, 500); 
 }
 
-
-async function stopMusic() {
-    await fetch(`/stop`);
-}
-
-async function togglePause() {
-    await fetch(`/pause`);
-}
+// ... stopMusic, togglePause, changeVolume, seek (inchangés) ...
 
 async function changeVolume(level) {
     await fetch(`/volume/${level}`);
@@ -88,6 +86,7 @@ async function changeVolume(level) {
 async function seek(seconds) {
     await fetch(`/seek/${seconds}`);
 }
+
 async function playNext() {
     if (!currentTrackId) return;
     const res = await fetch(`/next?current_id=${currentTrackId}`);
@@ -102,6 +101,72 @@ async function playPrevious() {
     if (data.id) play(data.id);
 }
 
+/**
+ * ---------------------------------------------------------
+ * SÉLECTEUR DE SORTIE AUDIO (MODALE)
+ * ---------------------------------------------------------
+ */
+const speakerBtn = document.getElementById("speakerBtn");
+if (speakerBtn) {
+    speakerBtn.addEventListener("click", openDeviceModal);
+}
+
+async function openDeviceModal() {
+    const modal = document.getElementById("deviceModal");
+    const list = document.getElementById("deviceList");
+    
+    modal.style.display = "block";
+    list.innerHTML = "<p style='color: #888;'>Recherche des périphériques...</p>";
+
+    try {
+        const resp = await fetch("/audio-devices");
+        const data = await resp.json();
+        
+        list.innerHTML = ""; // On vide le message de chargement
+
+        if (data.devices && data.devices.length > 0) {
+            data.devices.forEach(name => {
+                const fullDeviceString = `wasapi/${name}`;
+                const div = document.createElement("div");
+                div.className = "device-item";
+                
+                // Si c'est le device actuel, on ajoute une classe visuelle
+                if (selectedDevice === fullDeviceString) {
+                    div.classList.add("active");
+                }
+                
+                div.innerText = name;
+                div.onclick = () => {
+                    selectedDevice = fullDeviceString;
+                    localStorage.setItem("selectedAudioDevice", selectedDevice);
+                    console.log("Sortie audio définie sur :", selectedDevice);
+                    closeDeviceModal();
+                    
+                    // Optionnel : petit feedback visuel
+                    alert(`Sortie configurée : ${name}\nPrendra effet au prochain morceau.`);
+                };
+                list.appendChild(div);
+            });
+        } else {
+            list.innerHTML = "<p>Aucun périphérique trouvé.</p>";
+        }
+    } catch (err) {
+        list.innerHTML = "<p>Erreur lors de la récupération des périphériques.</p>";
+        console.error(err);
+    }
+}
+
+function closeDeviceModal() {
+    document.getElementById("deviceModal").style.display = "none";
+}
+
+// Fermer la modale si on clique en dehors du cadre
+window.onclick = function(event) {
+    const modal = document.getElementById("deviceModal");
+    if (event.target == modal) {
+        closeDeviceModal();
+    }
+}
 
 /**
  * ---------------------------------------------------------
