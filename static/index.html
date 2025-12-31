@@ -9,20 +9,33 @@
 <body>
 
 <header class="jukebox-header">
-
+<div class="now-playing-bar">
+    <div id="currentTrackInfo">
+        <span class="now-playing-label">EN ÉCOUTE :</span>
+        <span id="trackTitle">---</span> 
+        <span class="separator">—</span> 
+        <span id="trackArtist">---</span>
+        <span class="separator">—</span> 
+        <span id="trackAlbum">---</span>
+    </div>
+</div>
+</div>
     <!-- Zone 1 : Barre de recherche -->
     <div class="header-left">
         <input type="text" id="searchInput" placeholder="Rechercher..." oninput="doSearch()">
     </div>
 
-    <!-- Zone 2 : Boutons ⏪ ▶ ⏩ -->
+    <!-- Zone 2 : Boutons ⏮️ ⏪ ▶ ⏩ ⏭️ -->
     <div class="header-controls">
         <div class="player-controls">
-            <button onclick="seek(-10)" id="rewindBtn"></button>
-            <button onclick="togglePause()" id="pauseBtn"></button>
-            <button onclick="seek(10)" id="forwardBtn"></button>
+            <button onclick="playPrevious()" id="prevBtn" title="Précédent"></button>
+            <button onclick="seek(-10)" id="rewindBtn" title="Reculer 10s"></button>
+            <button onclick="togglePause()" id="pauseBtn" title="Lecture/Pause"></button>
+            <button onclick="seek(10)" id="forwardBtn" title="Avancer 10s"></button>
+            <button onclick="playNext()" id="nextBtn" title="Suivant"></button>
         </div>
     </div>
+
 
     <!-- ⭐ Zone 2.5 : Bouton Playlist -->
     <div class="header-playlist">

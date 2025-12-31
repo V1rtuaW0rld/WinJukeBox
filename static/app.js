@@ -58,10 +58,20 @@ async function doSearch() {
  *  COMMANDES SERVEUR (COHÉRENTES AVEC server.py)
  * ---------------------------------------------------------
  */
+let isLaunching = false;
+
 async function play(id) {
+    if (isLaunching) return;
+    isLaunching = true;
+
     currentTrackId = id;
     await fetch(`/play/${id}`);
+
+    setTimeout(() => {
+        isLaunching = false;
+    }, 500); // délai pour éviter les doublons
 }
+
 
 async function stopMusic() {
     await fetch(`/stop`);
@@ -78,6 +88,20 @@ async function changeVolume(level) {
 async function seek(seconds) {
     await fetch(`/seek/${seconds}`);
 }
+async function playNext() {
+    if (!currentTrackId) return;
+    const res = await fetch(`/next?current_id=${currentTrackId}`);
+    const data = await res.json();
+    if (data.id) play(data.id);
+}
+
+async function playPrevious() {
+    if (!currentTrackId) return;
+    const res = await fetch(`/previous?current_id=${currentTrackId}`);
+    const data = await res.json();
+    if (data.id) play(data.id);
+}
+
 
 /**
  * ---------------------------------------------------------
@@ -132,7 +156,7 @@ function initProgressBar() {
 
 /**
  * ---------------------------------------------------------
- *  SYNCHRONISATION AVEC MPV
+ * SYNCHRONISATION AVEC MPV & AFFICHAGE INFOS BDD
  * ---------------------------------------------------------
  */
 async function updateStatus() {
@@ -141,6 +165,39 @@ async function updateStatus() {
         if (!response.ok) return;
         const data = await response.json();
 
+        // --- 1. MISE À JOUR DES INFOS DANS LE HEADER (Titre, Artiste, Album) ---
+        // On utilise l'objet "track" renvoyé par le nouveau point de terminaison du serveur
+        if (data.track) {
+        const elTitle = document.getElementById("trackTitle");
+        const elArtist = document.getElementById("trackArtist");
+        const elAlbum = document.getElementById("trackAlbum");
+	    
+        // On ne met à jour que si l'élément existe vraiment dans le HTML
+        if (elTitle) elTitle.innerText = data.track.title || "---";
+        if (elArtist) elArtist.innerText = data.track.artist || "---";
+        if (elAlbum) elAlbum.innerText = data.track.album || "";
+	    
+        currentTrackId = data.track.id;
+}
+
+        // --- 2. GESTION DU HIGHLIGHT DANS LA PLAYLIST ---
+        // --- 2. GESTION DU HIGHLIGHT OPTIMISÉE ---
+        const allItems = document.querySelectorAll(".playlist-item");
+        
+        allItems.forEach(item => {
+            const isCurrent = (data.track && item.dataset.id == data.track.id);
+            
+            // On ne modifie le DOM que si c'est nécessaire (changement d'état)
+            if (isCurrent && !item.classList.contains("playing-now")) {
+                item.classList.add("playing-now");
+                // Optionnel : Scroller automatiquement vers le morceau s'il est caché
+                // item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else if (!isCurrent && item.classList.contains("playing-now")) {
+                item.classList.remove("playing-now");
+            }
+        });
+
+        // --- 3. BARRE DE PROGRESSION & TEMPS ---
         const currentTxt = document.getElementById("currentTime");
         const totalTxt = document.getElementById("totalTime");
         const btn = document.getElementById("pauseBtn");
@@ -160,6 +217,7 @@ async function updateStatus() {
             currentTxt.innerText = formatTime(data.pos || 0);
         }
 
+        // --- 4. ÉTAT DU BOUTON PAUSE ---
         if (data.paused) {
             btn.classList.remove("paused");
             btn.classList.add("playing");
@@ -173,6 +231,7 @@ async function updateStatus() {
     }
 }
 
+// Lancement de la boucle de synchronisation (1 fois par seconde)
 setInterval(updateStatus, 1000);
 
 /**
@@ -223,31 +282,35 @@ function refreshPlaylistUI() {
     playlist.forEach((song, index) => {
         const li = document.createElement("li");
         li.classList.add("playlist-item");
+        
+        // --- ÉTAPE CRUCIALE POUR LE HIGHLIGHT ---
+        // On attache l'ID de la BDD directement à l'élément HTML
+        li.dataset.id = song.id; 
 
-    // Zone texte cliquable
-    const textSpan = document.createElement("span");
-    textSpan.textContent = `${song.title} — ${song.artist}`;
-    textSpan.classList.add("playlist-text");
-    
-    textSpan.addEventListener("click", () => {
-        const index = playlist.findIndex(s => s.id === song.id);
-        if (index !== -1) {
-            isPlaylistMode = true;
-            currentPlaylistIndex = index;
-            play(song.id);
-        }
-    });
+        // Zone texte cliquable
+        const textSpan = document.createElement("span");
+        textSpan.textContent = `${song.title} — ${song.artist}`;
+        textSpan.classList.add("playlist-text");
+        
+        textSpan.addEventListener("click", () => {
+            const foundIndex = playlist.findIndex(s => s.id === song.id);
+            if (foundIndex !== -1) {
+                isPlaylistMode = true;
+                currentPlaylistIndex = foundIndex;
+                play(song.id);
+            }
+        });
 
-
-        // Bouton corbeille
+        // Bouton corbeille (pour supprimer de la playlist)
         const trashBtn = document.createElement("button");
         trashBtn.textContent = "🗑";
         trashBtn.classList.add("remove-btn");
         trashBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
+            e.stopPropagation(); // Empêche de lancer la musique quand on veut juste supprimer
             removeFromPlaylist(song.id);
         });
 
+        // Assemblage de la ligne
         li.appendChild(textSpan);
         li.appendChild(trashBtn);
         ul.appendChild(li);
@@ -297,7 +360,9 @@ function initPlaylistPanel() {
     const closePlaylistBtn = document.getElementById("closePlaylistBtn");
     const playPlaylistBtn = document.getElementById("playPlaylistBtn");
 	const shufflePlaylistBtn = document.getElementById("shufflePlaylistBtn");
-
+	const nextBtn = document.getElementById("nextBtn");
+    const prevBtn = document.getElementById("prevBtn");
+    
     if (openPlaylistBtn && playlistPanel) {
         openPlaylistBtn.addEventListener("click", () => {
             playlistPanel.classList.toggle("open");
@@ -324,22 +389,38 @@ function initPlaylistPanel() {
         shufflePlaylistBtn.addEventListener("click", () => {
             toggleShuffle();
         });
-    }	
+    }
 
-	
+    if (nextBtn) {
+        nextBtn.addEventListener("click", () => {
+            playNext();
+        });
+    }
+    
+    if (prevBtn) {
+        prevBtn.addEventListener("click", () => {
+            playPrevious();
+        });
+    }
 
-    document.addEventListener("click", (e) => {
-        if (e.target && e.target.classList.contains("add-to-playlist-btn")) {
-            addToPlaylistFromElement(e.target);
+
+document.addEventListener("click", (e) => {
+    // Pour l'ajout à la playlist
+    const addBtn = e.target.closest(".add-to-playlist-btn");
+    if (addBtn) {
+        addToPlaylistFromElement(addBtn);
+    }
+
+    // Pour le bouton Play (hors playlist)
+    const playBtn = e.target.closest(".play-btn");
+    if (playBtn) {
+        const id = Number(playBtn.dataset.id);
+        if (id) {
+            isPlaylistMode = false;
+            play(id);
         }
-        if (e.target && e.target.classList.contains("play-btn")) {
-            const id = Number(e.target.dataset.id);
-            if (id) {
-                isPlaylistMode = false;
-                play(id);
-            }
-        }
-    });
+    }
+});
 
     loadPlaylistFromServer();
     startPlaylistWatcher();
@@ -434,3 +515,5 @@ window.doSearch = doSearch;
 window.changeVolume = changeVolume;
 window.togglePause = togglePause;
 window.seek = seek;
+window.playNext = playNext;
+window.playPrevious = playPrevious;

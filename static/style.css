@@ -159,6 +159,34 @@ body {
     filter: brightness(1.2);
 }
 
+/* === BOUTONS PREVIOUS & NEXT === */
+#prevBtn,
+#nextBtn {
+    width: 20px;
+    height: 20px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+}
+
+#prevBtn {
+    background-image: url('/static/icons/previous.png');
+}
+
+#nextBtn {
+    background-image: url('/static/icons/next.png');
+}
+
+#prevBtn:active,
+#nextBtn:active {
+    transform: scale(0.9);
+    filter: brightness(1.2);
+}
+
+
 /* === BARRE DE PROGRESSION === */
 .progress-zone {
     display: flex;
@@ -404,5 +432,44 @@ body {
 
 #shufflePlaylistBtn.active {
     filter: brightness(1.6);
+    text-shadow: 0 0 8px #1db954;
 }
 
+/* Bandeau "Now Playing" */
+.now-playing-bar {
+    width: 100%;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #282828;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+#trackTitle {
+    color: #1db954; /* Vert pour le titre */
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+#trackArtist {
+    color: #b3b3b3;
+}
+
+.now-playing-label {
+    color: #555;
+    font-size: 0.7rem;
+    margin-right: 10px;
+    letter-spacing: 1px;
+}
+
+/* Highlight du morceau en cours dans la playlist */
+.playlist-item.playing-now {
+    background: #1db95422 !important; /* Fond vert très léger */
+    border-left: 4px solid #1db954;
+    transition: all 0.3s ease;
+}
+
+.playlist-item.playing-now .playlist-text {
+    color: #1db954;
+    font-weight: bold;
+}

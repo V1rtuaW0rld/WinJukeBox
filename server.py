@@ -30,6 +30,7 @@ STATIC_PATH = os.path.join(BASE_DIR, "static")
 DEVICE_ID = "wasapi/Headphones (AUKEY BR-C16)"
 IPC_PIPE = r"\\.\pipe\mpv-juke"
 shuffle_mode = False  # True = on lit shuffled_playlist, False = playlist normale
+current_playing_id = None
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -68,8 +69,16 @@ def search_songs(q: str = ""):
 
 @app.get("/play/{song_id}")
 def play_song(song_id: int):
-    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
+    global current_playing_id
+    current_playing_id = song_id 
     
+    # 1. Tuer toutes les instances MPV
+    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
+
+    # 2. Laisser le temps au système de terminer le kill
+    time.sleep(0.4)  # ← essentiel pour éviter les MPV fantômes
+
+    # 3. Récupérer le chemin du fichier
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute("SELECT path FROM tracks WHERE id = ?", (song_id,))
@@ -88,9 +97,13 @@ def play_song(song_id: int):
             f"--input-ipc-server={IPC_PIPE}",
             "--volume=70"
         ]
+
+        # 4. Lancer MPV proprement
         subprocess.Popen(args, creationflags=0x08000000)
         return {"status": "playing"}
+    
     return {"status": "error"}
+
 
 @app.get("/volume/{level}")
 def set_volume(level: int):
@@ -119,10 +132,35 @@ def set_position(position: int):
 
 @app.get("/status")
 def get_status():
+    global current_playing_id
     pos = read_mpv_property("time-pos") or 0
     duration = read_mpv_property("duration") or 0
     paused = read_mpv_property("pause") or False
-    return {"pos": pos, "duration": duration, "paused": paused}
+    
+    track_info = None
+    if current_playing_id:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        # On récupère les colonnes 1, 2 et 3 de votre table tracks
+        cur.execute("SELECT id, title, artist, album FROM tracks WHERE id = ?", (current_playing_id,))
+        res = cur.fetchone()
+        conn.close()
+        
+        if res:
+            track_info = {
+                "id": res[0], 
+                "title": res[1], 
+                "artist": res[2], 
+                "album": res[3]
+            }
+
+    # On renvoie l'objet 'track' dont le JavaScript a besoin
+    return {
+        "pos": pos, 
+        "duration": duration, 
+        "paused": paused, 
+        "track": track_info 
+    }
 
 # --- PLAYLIST ---
 @app.post("/playlist/add/{track_id}")
@@ -234,7 +272,7 @@ def shuffle_status():
 
 # Route pour obtenir la prochaine chanson
 from fastapi import Query
-
+# --- NEXT ---
 @app.get("/next")
 def get_next(current_id: int = Query(0)):
     """
@@ -295,6 +333,60 @@ def get_next(current_id: int = Query(0)):
         return {"id": next_row[0]}
     else:
         return {"id": None}
+
+# --- PREVIOUS ---
+@app.get("/previous")
+def get_previous(current_id: int = Query(0)):
+    """
+    Renvoie la chanson précédente selon le mode :
+    - shuffle_mode = True → shuffled_playlist
+    - sinon → playlist
+    """
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    global shuffle_mode
+
+    table = "shuffled_playlist" if shuffle_mode else "playlist"
+
+    # Si aucune chanson en cours → renvoyer la dernière
+    if current_id == 0:
+        cur.execute(f"""
+            SELECT track_id
+            FROM {table}
+            ORDER BY position DESC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        conn.close()
+        return {"id": row[0] if row else None}
+
+    # Trouver la position actuelle
+    cur.execute(f"""
+        SELECT position FROM {table}
+        WHERE track_id = ?
+    """, (current_id,))
+    res = cur.fetchone()
+
+    if not res:
+        conn.close()
+        return {"id": None}
+
+    current_pos = res[0]
+
+    # Trouver la précédente
+    cur.execute(f"""
+        SELECT track_id
+        FROM {table}
+        WHERE position < ?
+        ORDER BY position DESC
+        LIMIT 1
+    """, (current_pos,))
+    prev_row = cur.fetchone()
+    conn.close()
+
+    return {"id": prev_row[0] if prev_row else None}
+
 
 # Montage des fichiers statiques
 app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
