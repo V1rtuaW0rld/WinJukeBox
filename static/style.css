@@ -91,13 +91,15 @@ body {
         gap: 6px;
     }
 
+    #current-cover {
+        width: 40px;           /* Plus petit sur mobile */
+        height: 40px;
+    }
+    
     .now-playing-bar {
-        padding: 4px 0;
-        font-size: 0.85rem;
+        gap: 10px;             /* On resserre l'espace */
     }
 }
-
-
 
 
 /* === ZONE DE RECHERCHE === */
@@ -502,11 +504,43 @@ body {
 /* Bandeau "Now Playing" */
 .now-playing-bar {
     width: 100%;
-    text-align: center;
+    display: flex;             /* On passe en flex pour aligner image + texte */
+    align-items: center;
+    justify-content: center;   /* On garde le tout centré */
     padding-bottom: 10px;
     border-bottom: 1px solid #282828;
     margin-bottom: 10px;
     font-size: 0.9rem;
+    gap: 15px;                 /* Espace entre la pochette et le texte */
+}
+
+/* Le conteneur de l'image */
+.now-playing-cover {
+    flex-shrink: 0;            /* Empêche l'image de s'écraser */
+    display: flex;
+    align-items: center;
+}
+
+#current-cover {
+    width: 50px;               /* Taille équilibrée pour ton header */
+    height: 50px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid #333;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    transition: transform 0.3s ease;
+}
+
+/* Petit effet au survol */
+#current-cover:hover {
+    transform: scale(1.1);
+}
+
+#currentTrackInfo {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;           /* Permet de passer à la ligne sur mobile */
+    justify-content: center;
 }
 
 #trackTitle {

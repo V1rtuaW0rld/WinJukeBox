@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
+
 # 1. Création de l'application
 app = FastAPI()
 
@@ -412,6 +413,25 @@ def get_previous(current_id: int = Query(0)):
 
     return {"id": prev_row[0] if prev_row else None}
 
+
+
+#récupérer les covers
+@app.get("/cover/{track_id}")
+async def get_cover(track_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # On récupère le chemin de la pochette pour ce morceau
+    cursor.execute("SELECT cover_path FROM tracks WHERE id = ?", (track_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row and row[0]:
+        cover_path = row[0]
+        if os.path.exists(cover_path):
+            return FileResponse(cover_path)
+    
+    # Si pas d'image, on envoie une image par défaut
+    return FileResponse("static/default_cover.png")
 
 # Montage des fichiers statiques
 app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")

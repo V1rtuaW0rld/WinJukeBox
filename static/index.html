@@ -7,10 +7,15 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+
 <div class="header-wrapper">
     <header class="jukebox-header">
 
         <div class="now-playing-bar">
+            <div class="now-playing-cover"> 
+                <img id="current-cover" src="/static/default_cover.png" alt="Pochette">
+            </div>
+
             <div id="currentTrackInfo">
                 <span class="now-playing-label">EN ÉCOUTE :</span>
                 <span id="trackTitle">---</span> 
@@ -52,17 +57,17 @@
             <input type="range" id="volumeSlider" min="0" max="100" value="70" oninput="changeVolume(this.value)">
         </div>
 
-    </header>
-
-    <div id="deviceModal" class="modal">
-        <div class="modal-content">
-            <h3>Choisir la sortie audio</h3>
-            <div id="deviceList">
-                </div>
-            <button onclick="closeDeviceModal()" class="close-modal-btn">Fermer</button>
-        </div>
+    </header> </div> <div id="deviceModal" class="modal">
+    <div class="modal-content">
+        <h3>Choisir la sortie audio</h3>
+        <div id="deviceList"></div>
+        <button onclick="closeDeviceModal()" class="close-modal-btn">Fermer</button>
     </div>
 </div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
 
 
 <!-- Panneau latéral de playlist -->

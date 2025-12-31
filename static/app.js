@@ -66,7 +66,6 @@ async function play(id) {
     if (isLaunching) return;
     isLaunching = true;
 
-    currentTrackId = id;
     
     // On encode le device pour gérer les espaces et caractères spéciaux du FriendlyName
     const deviceParam = encodeURIComponent(selectedDevice);
@@ -236,34 +235,41 @@ async function updateStatus() {
         if (!response.ok) return;
         const data = await response.json();
 
-        // --- 1. MISE À JOUR DES INFOS DANS LE HEADER (Titre, Artiste, Album) ---
-        // On utilise l'objet "track" renvoyé par le nouveau point de terminaison du serveur
+        // --- 1. MISE À JOUR DES INFOS DANS LE HEADER ---
         if (data.track) {
-        const elTitle = document.getElementById("trackTitle");
-        const elArtist = document.getElementById("trackArtist");
-        const elAlbum = document.getElementById("trackAlbum");
-	    
-        // On ne met à jour que si l'élément existe vraiment dans le HTML
-        if (elTitle) elTitle.innerText = data.track.title || "---";
-        if (elArtist) elArtist.innerText = data.track.artist || "---";
-        if (elAlbum) elAlbum.innerText = data.track.album || "";
-	    
-        currentTrackId = data.track.id;
-}
+            const elTitle = document.getElementById("trackTitle");
+            const elArtist = document.getElementById("trackArtist");
+            const elAlbum = document.getElementById("trackAlbum");
+            const elCover = document.getElementById("current-cover");
+
+            // Mise à jour des textes
+            if (elTitle) elTitle.innerText = data.track.title || "---";
+            if (elArtist) elArtist.innerText = data.track.artist || "---";
+            if (elAlbum) elAlbum.innerText = data.track.album || "";
+
+            // GESTION DYNAMIQUE DE LA POCHETTE (sans F5)
+            if (elCover) {
+                const nextSrc = `/cover/${data.track.id}`;
+                // On ne change la source que si l'URL est différente
+                if (!elCover.src.includes(nextSrc)) {
+                    console.log("Nouveau morceau, mise à jour de l'image...");
+                    elCover.src = nextSrc + "?t=" + new Date().getTime();
+                }
+            }
+
+            // On garde l'ID en mémoire pour les autres fonctions
+            currentTrackId = data.track.id;
+        }
 
         // --- 2. GESTION DU HIGHLIGHT DANS LA PLAYLIST ---
-        // --- 2. GESTION DU HIGHLIGHT OPTIMISÉE ---
         const allItems = document.querySelectorAll(".playlist-item");
-        
         allItems.forEach(item => {
             const isCurrent = (data.track && item.dataset.id == data.track.id);
-            
-            // On ne modifie le DOM que si c'est nécessaire (changement d'état)
-            if (isCurrent && !item.classList.contains("playing-now")) {
-                item.classList.add("playing-now");
-                // Optionnel : Scroller automatiquement vers le morceau s'il est caché
-                // item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            } else if (!isCurrent && item.classList.contains("playing-now")) {
+            if (isCurrent) {
+                if (!item.classList.contains("playing-now")) {
+                    item.classList.add("playing-now");
+                }
+            } else {
                 item.classList.remove("playing-now");
             }
         });
@@ -273,28 +279,32 @@ async function updateStatus() {
         const totalTxt = document.getElementById("totalTime");
         const btn = document.getElementById("pauseBtn");
 
+        // On s'assure que le slider existe
         if (!slider) {
             slider = document.getElementById("progressSlider");
-            if (!slider) return;
         }
 
-        if (data.duration > 0) {
-            slider.max = Math.floor(data.duration);
-            totalTxt.innerText = formatTime(data.duration);
-        }
+        if (slider) {
+            if (data.duration > 0) {
+                slider.max = Math.floor(data.duration);
+                if (totalTxt) totalTxt.innerText = formatTime(data.duration);
+            }
 
-        if (!isDragging) {
-            slider.value = Math.floor(data.pos || 0);
-            currentTxt.innerText = formatTime(data.pos || 0);
+            if (!isDragging) {
+                slider.value = Math.floor(data.pos || 0);
+                if (currentTxt) currentTxt.innerText = formatTime(data.pos || 0);
+            }
         }
 
         // --- 4. ÉTAT DU BOUTON PAUSE ---
-        if (data.paused) {
-            btn.classList.remove("paused");
-            btn.classList.add("playing");
-        } else {
-            btn.classList.remove("playing");
-            btn.classList.add("paused");
+        if (btn) {
+            if (data.paused) {
+                btn.classList.remove("paused");
+                btn.classList.add("playing");
+            } else {
+                btn.classList.remove("playing");
+                btn.classList.add("paused");
+            }
         }
 
     } catch (err) {
