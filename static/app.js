@@ -77,7 +77,13 @@ async function play(id) {
     }, 500); 
 }
 
-// ... stopMusic, togglePause, changeVolume, seek (inchangés) ...
+async function stopMusic() {
+    await fetch(`/stop`);
+}
+
+async function togglePause() {
+    await fetch(`/pause`);
+}
 
 async function changeVolume(level) {
     await fetch(`/volume/${level}`);
@@ -115,7 +121,7 @@ async function openDeviceModal() {
     const modal = document.getElementById("deviceModal");
     const list = document.getElementById("deviceList");
     
-    modal.style.display = "block";
+    modal.style.display = "flex";
     list.innerHTML = "<p style='color: #888;'>Recherche des périphériques...</p>";
 
     try {
