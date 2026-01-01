@@ -17,6 +17,7 @@ body {
 }
 
 .jukebox-header {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
@@ -24,9 +25,28 @@ body {
     gap: 20px;
     padding: 10px 25px 15px;
     box-sizing: border-box;
-    max-width: 1200px;
-    margin: 0 auto;
     width: 100%;
+    overflow: hidden; /* Important pour que le fond ne dépasse pas */
+    background-color: #000; /* Couleur de secours */
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    transition: background-image 0.5s ease-in-out; /* Transition douce */
+}
+
+/* Optionnel : Ajoute un voile noir par-dessus l'image pour que les boutons blancs ressortent mieux */
+.jukebox-header::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.4); /* Assombrit la photo à 40% */
+    z-index: 0;
+}
+
+/* On force tous les éléments du header à passer devant le fond */
+.jukebox-header > * {
+    position: relative;
+    z-index: 1;
 }
 
 
@@ -637,3 +657,4 @@ body {
     color: #1db954;
     font-weight: bold;
 }
+

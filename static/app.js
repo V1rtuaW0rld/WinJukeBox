@@ -237,27 +237,35 @@ async function updateStatus() {
 
         // --- 1. MISE À JOUR DES INFOS DANS LE HEADER ---
         if (data.track) {
+            const elHeader = document.querySelector(".jukebox-header");
             const elTitle = document.getElementById("trackTitle");
             const elArtist = document.getElementById("trackArtist");
             const elAlbum = document.getElementById("trackAlbum");
             const elCover = document.getElementById("current-cover");
+            const nextSrc = `/cover/${data.track.id}`;
+            
+            
+            // A. Mise à jour du fond du header (Background)
+            if (elHeader) {
+                const imageUrl = `url("${nextSrc}?t=${new Date().getTime()}")`;
+                // On ne met à jour que si l'ID a changé pour éviter les clignotements
+                if (!elHeader.style.backgroundImage.includes(nextSrc)) {
+                    elHeader.style.backgroundImage = imageUrl;
+                }
+            }
 
-            // Mise à jour des textes
+            // B. Mise à jour des textes
             if (elTitle) elTitle.innerText = data.track.title || "---";
             if (elArtist) elArtist.innerText = data.track.artist || "---";
             if (elAlbum) elAlbum.innerText = data.track.album || "";
 
-            // GESTION DYNAMIQUE DE LA POCHETTE (sans F5)
+            // C. Mise à jour de la petite vignette (img tag)
             if (elCover) {
-                const nextSrc = `/cover/${data.track.id}`;
-                // On ne change la source que si l'URL est différente
                 if (!elCover.src.includes(nextSrc)) {
-                    console.log("Nouveau morceau, mise à jour de l'image...");
                     elCover.src = nextSrc + "?t=" + new Date().getTime();
                 }
             }
 
-            // On garde l'ID en mémoire pour les autres fonctions
             currentTrackId = data.track.id;
         }
 
