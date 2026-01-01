@@ -374,10 +374,10 @@ body {
 /* === PANNEAU PLAYLIST (SLIDE-IN + SCROLL) === */
 
 .playlist-panel {
-	z-index: 4000;
+    z-index: 4000;
     position: fixed;
     top: 0;
-    right: -400px; /* caché par défaut */
+    right: -400px;
     width: 400px;
     height: 100vh;
     background: #181818;
@@ -385,12 +385,21 @@ body {
     padding: 20px;
     box-sizing: border-box;
     transition: right 0.3s ease;
-    
 
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* empêche le débordement interne */
+    overflow: hidden; /* OK ici, car le scroll sera sur l'enfant */
 }
+
+/* Zone scrollable interne */
+.playlist-scroll-zone {
+    flex: 1;
+    overflow-y: auto;
+    margin-top: 10px;
+    padding-right: 6px;
+    overscroll-behavior: contain;
+}
+
 
 /* === AJUSTEMENT POUR L'EFFET ACCORDÉON === */
 

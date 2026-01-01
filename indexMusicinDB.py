@@ -1,33 +1,41 @@
 import os
 import sqlite3
+import logging
 from mutagen.id3 import ID3
+from tqdm import tqdm
 
 # --- CONFIGURATION ---
-MUSIC_FOLDER = r"\\192.168.0.3\music\Ben Harper"
+MUSIC_FOLDER = r"\\192.168.0.3\music"
 DB_NAME = "jukebox.db"
+
+# --- LOGGING ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    # 1. Table Tracks (avec la nouvelle colonne)
+    # Table Tracks
     c.execute('''CREATE TABLE IF NOT EXISTS tracks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   title TEXT, artist TEXT, album TEXT, path TEXT, cover_path TEXT)''')
     
-    # Sécurité : Si la table existait sans cover_path, on l'ajoute
+    # Ajout colonne cover_path si manquante
     try:
         c.execute("ALTER TABLE tracks ADD COLUMN cover_path TEXT")
     except sqlite3.OperationalError:
-        pass # Déjà là, tout va bien
+        pass
 
-    # 2. Table Playlist
+    # Table Playlist
     c.execute('''CREATE TABLE IF NOT EXISTS playlist (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     track_id INTEGER NOT NULL,
                     position INTEGER NOT NULL)''')
 
-    # 3. Table Shuffled Playlist
+    # Table Shuffled Playlist
     c.execute('''CREATE TABLE IF NOT EXISTS shuffled_playlist (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     track_id INTEGER NOT NULL,
@@ -37,63 +45,68 @@ def init_db():
     return conn
 
 
-def add_column():
-    conn = sqlite3.connect(DB_NAME)
-    try:
-        conn.execute("ALTER TABLE tracks ADD COLUMN cover_path TEXT")
-        print("Colonne 'cover_path' ajoutée avec succès.")
-    except sqlite3.OperationalError:
-        print("La colonne existe déjà.")
-    conn.close()
-
 def scan_music():
+    logging.info(f"Scan en cours de {MUSIC_FOLDER}...")
+
     conn = init_db()
     c = conn.cursor()
     c.execute("DELETE FROM tracks")
-    
-    print(f"Scan en cours de {MUSIC_FOLDER}...")
-    
+
+    # --- Étape 1 : Pré-scan pour compter les MP3 ---
+    logging.info("Pré-scan des fichiers...")
+    all_mp3 = []
+
     for root, dirs, files in os.walk(MUSIC_FOLDER):
-        # --- DÉTECTION DE LA COUVERTURE ---
-        # On cherche un fichier image dans le dossier actuel (root)
-        current_cover = None
-        for f in files:
-            if f.lower() in ['cover.jpg', 'cover.png', 'folder.jpg', 'front.jpg']:
-                current_cover = os.path.join(root, f)
-                break # On prend la première image trouvée
-
         for file in files:
-            if file.endswith(".mp3"):
-                full_path = os.path.join(root, file)
-                # Initialisation des variables par défaut
-                artist = "Artiste Inconnu"
-                album = os.path.basename(root)
-                title = file
+            if file.lower().endswith(".mp3"):
+                all_mp3.append((root, file))
 
-                try:
-                    # On tente de lire les tags ID3
-                    try:
-                        audio = ID3(full_path)
-                        artist = str(audio.get('TPE1', ['Artiste Inconnu'])[0])
-                        album = str(audio.get('TALB', ['Album Inconnu'])[0])
-                        title = str(audio.get('TIT2', [file])[0])
-                    except Exception:
-                        # Si ID3 échoue (pas de tags), on garde les valeurs par défaut
-                        pass
-                    
-                    # C'est ici qu'on insère, une fois qu'on a soit les tags, soit le défaut
-                    c.execute("""INSERT INTO tracks (title, artist, album, path, cover_path) 
-                                 VALUES (?, ?, ?, ?, ?)""",
-                              (title, artist, album, full_path, current_cover))
+    total = len(all_mp3)
+    logging.info(f"{total} fichiers MP3 détectés.")
 
-                except Exception as e:
-                    # Ce except ferme le premier 'try' (celui du haut)
-                    print(f"Erreur d'insertion pour {file}: {e}")
-    
+    # --- Étape 2 : Scan réel avec barre de progression ---
+    for root, file in tqdm(all_mp3, desc="Indexation des MP3"):
+        full_path = os.path.join(root, file)
+
+        # Détection de la couverture
+        current_cover = None
+        try:
+            for f in os.listdir(root):
+                if f.lower() in ['cover.jpg', 'cover.png', 'folder.jpg', 'front.jpg']:
+                    current_cover = os.path.join(root, f)
+                    break
+        except Exception as e:
+            logging.warning(f"Impossible de lire le dossier {root}: {e}")
+
+        # Valeurs par défaut
+        artist = "Artiste Inconnu"
+        album = os.path.basename(root)
+        title = file
+
+        # Lecture des tags ID3
+        try:
+            try:
+                audio = ID3(full_path)
+                artist = str(audio.get('TPE1', ['Artiste Inconnu'])[0])
+                album = str(audio.get('TALB', ['Album Inconnu'])[0])
+                title = str(audio.get('TIT2', [file])[0])
+            except Exception:
+                pass  # Tags manquants ou illisibles
+
+            # Insertion en base
+            c.execute("""INSERT INTO tracks (title, artist, album, path, cover_path) 
+                         VALUES (?, ?, ?, ?, ?)""",
+                      (title, artist, album, full_path, current_cover))
+
+        except Exception as e:
+            logging.error(f"Erreur d'insertion pour {file}: {e}")
+
     conn.commit()
     count = c.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
-    print(f"Scan terminé ! {count} morceaux indexés avec leurs images.")
     conn.close()
+
+    logging.info(f"Scan terminé ! {count} morceaux indexés.")
+
 
 if __name__ == "__main__":
     scan_music()
