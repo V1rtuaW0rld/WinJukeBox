@@ -455,19 +455,23 @@ function initPlaylistPanel() {
     const openPlaylistBtn = document.getElementById("openPlaylistBtn");
     const closePlaylistBtn = document.getElementById("closePlaylistBtn");
     const playPlaylistBtn = document.getElementById("playPlaylistBtn");
-	const shufflePlaylistBtn = document.getElementById("shufflePlaylistBtn");
-	const nextBtn = document.getElementById("nextBtn");
+    const shufflePlaylistBtn = document.getElementById("shufflePlaylistBtn");
+    const nextBtn = document.getElementById("nextBtn");
     const prevBtn = document.getElementById("prevBtn");
     
     if (openPlaylistBtn && playlistPanel) {
         openPlaylistBtn.addEventListener("click", () => {
+            // On ouvre le panneau et on notifie le body pour décaler la liste
             playlistPanel.classList.toggle("open");
+            document.body.classList.toggle("playlist-is-open");
         });
     }
 
     if (closePlaylistBtn && playlistPanel) {
         closePlaylistBtn.addEventListener("click", () => {
+            // On ferme le panneau et on retire le décalage
             playlistPanel.classList.remove("open");
+            document.body.classList.remove("playlist-is-open");
         });
     }
 
@@ -480,7 +484,7 @@ function initPlaylistPanel() {
             }
         });
     }
-	
+    
     if (shufflePlaylistBtn) {
         shufflePlaylistBtn.addEventListener("click", () => {
             toggleShuffle();
@@ -499,31 +503,29 @@ function initPlaylistPanel() {
         });
     }
 
-
-document.addEventListener("click", (e) => {
-    // Pour l'ajout à la playlist
-    const addBtn = e.target.closest(".add-to-playlist-btn");
-    if (addBtn) {
-        addToPlaylistFromElement(addBtn);
-    }
-
-    // Pour le bouton Play (hors playlist)
-    const playBtn = e.target.closest(".play-btn");
-    if (playBtn) {
-        const id = Number(playBtn.dataset.id);
-        if (id) {
-            isPlaylistMode = false;
-            play(id);
+    // Gestion des clics délégués pour les boutons dans les cartes
+    document.addEventListener("click", (e) => {
+        // Pour l'ajout à la playlist
+        const addBtn = e.target.closest(".add-to-playlist-btn");
+        if (addBtn) {
+            addToPlaylistFromElement(addBtn);
         }
-    }
-});
+
+        // Pour le bouton Play (hors playlist)
+        const playBtn = e.target.closest(".play-btn");
+        if (playBtn) {
+            const id = Number(playBtn.dataset.id);
+            if (id) {
+                isPlaylistMode = false;
+                play(id);
+            }
+        }
+    });
 
     loadPlaylistFromServer();
     startPlaylistWatcher();
-	refreshShuffleStatus();
+    refreshShuffleStatus();
 }
-
-
 
 /* Ajout des helpers shuffle */
 let shuffleActive = false;
@@ -577,7 +579,6 @@ async function toggleShuffle() {
     }
 }
 
-
 /* Bouton action en bas du panneau playlist */
 const clearPlaylistBtn = document.getElementById("clearPlaylistBtn");
 
@@ -587,8 +588,6 @@ if (clearPlaylistBtn) {
         loadPlaylistFromServer();
     });
 }
-
-
 /**
  * ---------------------------------------------------------
  *  INITIALISATION GLOBALE
