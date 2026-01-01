@@ -235,39 +235,43 @@ async function updateStatus() {
         if (!response.ok) return;
         const data = await response.json();
 
-        // --- 1. MISE À JOUR DES INFOS DANS LE HEADER ---
-        if (data.track) {
-            const elHeader = document.querySelector(".jukebox-header");
-            const elTitle = document.getElementById("trackTitle");
-            const elArtist = document.getElementById("trackArtist");
-            const elAlbum = document.getElementById("trackAlbum");
-            const elCover = document.getElementById("current-cover");
-            const nextSrc = `/cover/${data.track.id}`;
-            
-            
-            // A. Mise à jour du fond du header (Background)
-            if (elHeader) {
-                const imageUrl = `url("${nextSrc}?t=${new Date().getTime()}")`;
-                // On ne met à jour que si l'ID a changé pour éviter les clignotements
-                if (!elHeader.style.backgroundImage.includes(nextSrc)) {
-                    elHeader.style.backgroundImage = imageUrl;
-                }
-            }
+        // --- 1. MISE À JOUR DES INFOS DANS LE HEADER ET L'AMBIANCE ---
+if (data.track) {
+    // CONDITION CRUCIALE : On ne fait rien si c'est la même chanson qu'avant
+    if (data.track.id !== currentTrackId) {
+        
+        const elHeader = document.querySelector(".jukebox-header");
+        const elCover = document.getElementById("current-cover");
+        const nextSrc = `/cover/${data.track.id}`;
+        const timestamp = new Date().getTime();
+        const fullImageUrl = `url("${nextSrc}?t=${timestamp}")`;
 
-            // B. Mise à jour des textes
-            if (elTitle) elTitle.innerText = data.track.title || "---";
-            if (elArtist) elArtist.innerText = data.track.artist || "---";
-            if (elAlbum) elAlbum.innerText = data.track.album || "";
+        // Mise à jour du fond de page (interstices) - Une seule fois par titre
+        document.body.style.backgroundImage = fullImageUrl;
 
-            // C. Mise à jour de la petite vignette (img tag)
-            if (elCover) {
-                if (!elCover.src.includes(nextSrc)) {
-                    elCover.src = nextSrc + "?t=" + new Date().getTime();
-                }
-            }
-
-            currentTrackId = data.track.id;
+        // Mise à jour du header - Une seule fois par titre
+        if (elHeader) {
+            elHeader.style.backgroundImage = fullImageUrl;
         }
+
+        // Mise à jour de la vignette
+        if (elCover) {
+            elCover.src = `${nextSrc}?t=${timestamp}`;
+        }
+
+        // Mise à jour des textes
+        const elTitle = document.getElementById("trackTitle");
+        const elArtist = document.getElementById("trackArtist");
+        const elAlbum = document.getElementById("trackAlbum");
+        
+        if (elTitle) elTitle.innerText = data.track.title || "---";
+        if (elArtist) elArtist.innerText = data.track.artist || "---";
+        if (elAlbum) elAlbum.innerText = data.track.album || "";
+
+        // On enregistre le nouvel ID pour bloquer les prochaines mises à jour inutiles
+        currentTrackId = data.track.id;
+    }
+}
 
         // --- 2. GESTION DU HIGHLIGHT DANS LA PLAYLIST ---
         const allItems = document.querySelectorAll(".playlist-item");

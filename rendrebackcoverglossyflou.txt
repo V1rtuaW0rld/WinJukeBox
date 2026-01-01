@@ -1,0 +1,16 @@
+a partir de la ligne 37
+
+/* Optionnel : Ajoute un voile noir par-dessus l'image pour que les boutons blancs ressortent mieux */
+.jukebox-header::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    /* On récupère l'image de fond du parent */
+    background-image: inherit; 
+    background-size: cover;
+    background-position: center;
+    /* L'effet glossy est ici : flou + assombrissement */
+    filter: blur(40px) brightness(0.5); 
+    transform: scale(1.2); /* Pour éviter les bords blancs du flou */
+    z-index: 0;
+}

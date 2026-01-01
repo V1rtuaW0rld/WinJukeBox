@@ -658,3 +658,31 @@ body {
     font-weight: bold;
 }
 
+body {
+    background-attachment: fixed; /* L'image ne bouge pas quand on scrolle */
+    background-size: cover;
+    background-position: center;
+    transition: background-image 0.8s ease-in-out; /* Transition douce */
+    background-color: #000;
+}
+
+/* On ajoute un flou sur tout le fond pour l'effet ambiance */
+/* Note: On utilise un pseudo-élément pour flouter le fond sans flouter le texte */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: inherit;
+    background-size: cover;
+    background-position: center;
+    filter: blur(60px) brightness(0.3); /* Ajuste le flou et la luminosité ici */
+    z-index: -1;
+}
+
+/* On s'assure que les cartes de chansons sont bien opaques pour masquer le fond */
+.song-card {
+    background-color: #181818; /* Ton noir habituel */
+    margin-bottom: 8px; /* C'est cet espace qui laissera voir le fond flou */
+    position: relative;
+    z-index: 1;
+}
