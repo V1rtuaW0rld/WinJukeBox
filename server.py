@@ -5,11 +5,38 @@ import uvicorn
 import json
 import time
 import random
+import ctypes   # <--- AJOUTÉ
+import asyncio  # <--- AJOUTÉ
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
+# --- AJOUT: GESTION MISE EN VEILLE ---
+# Constantes Windows
+ES_CONTINUOUS = 0x80000000
+ES_SYSTEM_REQUIRED = 0x00000001
+ES_DISPLAY_REQUIRED = 0x00000002
+
+def set_keep_awake(enable=True):
+    """Active ou désactive le mode 'pas de veille'."""
+    try:
+        if enable:
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+            )
+        else:
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                ES_CONTINUOUS
+            )
+    except Exception as e:
+        print(f"Erreur gestion veille: {e}")
+
+# Variables pour le timer de veille
+last_music_time = time.time()
+TIMEOUT_DELAY = 5 * 60  # 5 minutes
+
+# -------------------------------------
 
 # 1. Création de l'application
 app = FastAPI()
@@ -28,12 +55,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MPV_PATH = os.path.join(BASE_DIR, "mpv.exe")
 DB_NAME = os.path.join(BASE_DIR, "jukebox.db")
 STATIC_PATH = os.path.join(BASE_DIR, "static")
-DEVICE_ID = "wasapi/Headphones (AUKEY BR-C16)"
 IPC_PIPE = r"\\.\pipe\mpv-juke"
-shuffle_mode = False  # True = on lit shuffled_playlist, False = playlist normale
+shuffle_mode = False 
 current_playing_id = None
-# Configuration Audio par défaut
-DEVICE_ID = "auto" # Valeur de secours
+DEVICE_ID = "auto"
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -53,11 +78,64 @@ def read_mpv_property(prop):
     except:
         return None
 
+# --- AJOUT: TÂCHE DE FOND (BACKGROUND TASK) ---
+from contextlib import asynccontextmanager # <--- Ajoute cet import en haut du fichier
+
+# --- GESTION DU CYCLE DE VIE (LIFESPAN) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ce code s'exécute au DÉMARRAGE
+    monitor_task = asyncio.create_task(monitor_sleep_loop())
+    yield
+    # Ce code s'exécute à la FERMETURE
+    monitor_task.cancel() # Arrête la tâche de fond
+    set_keep_awake(False) # Rend la main à Windows
+    print("--- Surveillance de la veille désactivée ---")
+
+# --- MODIFICATION DE LA CRÉATION DE L'APP ---
+app = FastAPI(lifespan=lifespan)
+async def monitor_sleep_loop():
+    """Vérifie toutes les 10 secondes si la musique tourne"""
+    global last_music_time
+    print("--- Surveillance de la mise en veille activée ---")
+    
+    while True:
+        # On vérifie si MPV tourne et s'il n'est pas en pause
+        # read_mpv_property renvoie None si MPV est éteint, True si pause, False si lecture
+        is_paused = read_mpv_property("pause")
+        
+        # On considère que la musique joue SI : mpv répond (pas None) ET pause est Faux
+        is_playing = (is_paused is False)
+
+        current_time = time.time()
+
+        if is_playing:
+            # La musique joue : on reset le timer et on bloque la veille
+            last_music_time = current_time
+            set_keep_awake(True)
+            # print("Musique en cours - Veille Bloquée", end="\r") # Décommenter pour debug
+        else:
+            # La musique est arrêtée ou en pause
+            time_since_stop = current_time - last_music_time
+            
+            if time_since_stop < TIMEOUT_DELAY:
+                # Moins de 5 min : on bloque encore
+                set_keep_awake(True)
+                # print(f"Silence depuis {int(time_since_stop)}s - Veille Bloquée", end="\r")
+            else:
+                # Plus de 5 min : on libère Windows
+                set_keep_awake(False)
+                # print("Délai dépassé - Windows peut dormir", end="\r")
+
+        # On attend 10 secondes avant la prochaine vérification (sans bloquer le serveur)
+        await asyncio.sleep(10)
+
 # --- ROUTES ---
 
 @app.get("/")
 def read_index():
     return FileResponse(os.path.join(STATIC_PATH, "index.html"))
+    
 
 @app.get("/search")
 def search_songs(q: str = ""):
