@@ -7,44 +7,56 @@ body {
 }
 
 /* === HEADER RESPONSIVE === */
+.header-wrapper {
+    position: sticky;
+    top: 0;
+    z-index: 3000;
+    background: #000;
+    border-bottom: 1px solid #282828;
+}
+
 .jukebox-header {
+    position: relative;
     display: flex;
-    flex-wrap: wrap; /* Permet le passage à la ligne */
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     gap: 20px;
-    padding: 10px 25px 15px; /* padding-bottom intégré */
-    background: #000;
-    border-bottom: 1px solid #282828;
+    padding: 10px 25px 15px;
     box-sizing: border-box;
-    max-width: 1200px; /* Centrage sur grands écrans */
-    margin: 0 auto;
     width: 100%;
+    overflow: hidden; /* Important pour que le fond ne dépasse pas */
+    background-color: #000; /* Couleur de secours */
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    transition: background-image 0.5s ease-in-out; /* Transition douce */
 }
+
+/* Optionnel : Ajoute un voile noir par-dessus l'image pour que les boutons blancs ressortent mieux */
+.jukebox-header::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.4); /* Assombrit la photo à 40% */
+    z-index: 0;
+}
+
+/* On force tous les éléments du header à passer devant le fond */
+.jukebox-header > * {
+    position: relative;
+    z-index: 1;
+}
+
 
 /* Chaque zone prend environ 22–24% sur grand écran */
 .header-left,
 .header-controls,
+.header-playlist,
 .header-progress,
 .header-right {
-    flex: 1 1 22%;
-    min-width: 200px; /* Empêche l’écrasement */
-}
-
-/* Sur petit écran : les zones passent en colonne */
-@media (max-width: 768px) {
-    .jukebox-header {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .header-left,
-    .header-controls,
-    .header-progress,
-    .header-right {
-        flex: 1 1 100%;
-        min-width: auto;
-    }
+    flex: 1 1 18%;
+    min-width: 120px;
 }
 
 /* === ZONE DE RECHERCHE === */
@@ -74,6 +86,30 @@ body {
     align-items: center;
     justify-content: center;
 }
+
+.player-controls .playlist-btn {
+    all: unset;
+    background: #1db954;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    color: black;
+    font-weight: bold;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 8px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.player-controls .playlist-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 5px rgba(29, 185, 84, 0.5);
+}
+
 
 /* === BOUTON CENTRAL PLAY/PAUSE === */
 #pauseBtn {
@@ -129,6 +165,36 @@ body {
     transform: scale(0.9);
     filter: brightness(1.2);
 }
+
+/* === BOUTONS PREVIOUS & NEXT === */
+#prevBtn,
+#nextBtn {
+    width: 20px;
+    height: 20px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+}
+
+#prevBtn {
+    background-image: url('/static/icons/previous.png');
+    margin-right: 20px; /* Ajoute l'espace de 20px vers la gauche */
+}
+
+#nextBtn {
+    background-image: url('/static/icons/next.png');
+    margin-left: 20px;  /* Ajoute l'espace de 20px vers la droite */
+}
+
+#prevBtn:active,
+#nextBtn:active {
+    transform: scale(0.9);
+    filter: brightness(1.2);
+}
+
 
 /* === BARRE DE PROGRESSION === */
 .progress-zone {
@@ -201,4 +267,494 @@ body {
 .play-btn span {
     display: block;
     line-height: 0;
+}
+
+
+/* === REGLAGE AMBIANCE INTERSTICES (Correction de ta ligne coupée à la fin) === */
+body {
+    background-attachment: fixed;
+    background-size: cover;
+    background-position: center;
+    background-color: #000;
+    transition: background-image 0.8s ease-in-out;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: inherit;
+    background-size: cover;
+    background-position: center;
+    filter: blur(60px) brightness(0.3);
+    z-index: -1;
+}
+
+
+#playlistItems {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+}
+
+#playlistItems li {
+    padding: 10px;
+    background: #242424;
+    margin-bottom: 8px;
+    border-radius: 4px;
+}
+
+.play-all-btn {
+    width: 100%;
+    background: #1db954;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: black;
+    font-weight: bold;
+}
+
+.add-to-playlist-btn {
+    background: #1db954;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 8px;
+    cursor: pointer;
+    color: black;
+}
+
+.song-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.header-playlist {
+    flex: 0 0 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#playlistItems {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.playlist-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px;
+}
+
+.playlist-text {
+    flex: 1;
+    cursor: pointer;
+}
+
+.remove-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+}
+/* === POUBELLE playlist === */
+.remove-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: white; 
+}
+.remove-btn:hover {
+    color: #ff4444;
+}
+.playlist-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 8px;
+}
+
+.playlist-actions button {
+    font-size: 18px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: white;
+}
+
+.playlist-actions button:hover {
+    color: #ff4444;
+}
+/* === Bouton Shuffle === */
+#shufflePlaylistBtn.inactive {
+    filter: brightness(0.7);
+}
+
+#shufflePlaylistBtn.active {
+    filter: brightness(1.6);
+    text-shadow: 0 0 8px #1db954;
+}
+
+/* Bandeau "Now Playing" */
+.now-playing-bar {
+    width: 100%;
+    display: flex;             /* On passe en flex pour aligner image + texte */
+    align-items: center;
+    justify-content: center;   /* On garde le tout centré */
+    padding-bottom: 10px;
+    border-bottom: 1px solid #282828;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    gap: 15px;                 /* Espace entre la pochette et le texte */
+}
+
+/* Le conteneur de l'image */
+.now-playing-cover {
+    flex-shrink: 0;            /* Empêche l'image de s'écraser */
+    display: flex;
+    align-items: center;
+}
+
+#current-cover {
+    width: 50px;               /* Taille équilibrée pour ton header */
+    height: 50px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid #333;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    transition: transform 0.3s ease;
+}
+
+/* Petit effet au survol */
+#current-cover:hover {
+    transform: scale(1.1);
+}
+
+#currentTrackInfo {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;           /* Permet de passer à la ligne sur mobile */
+    justify-content: center;
+}
+
+#trackTitle {
+    color: #1db954; /* Vert pour le titre */
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+#trackArtist {
+    color: #b3b3b3;
+}
+
+.now-playing-label {
+    color: #555;
+    font-size: 0.7rem;
+    margin-right: 10px;
+    letter-spacing: 1px;
+}
+
+/* Highlight du morceau en cours dans la playlist */
+.playlist-item.playing-now {
+    background: #1db95422 !important; /* Fond vert très léger */
+    border-left: 4px solid #1db954;
+    transition: all 0.3s ease;
+}
+
+.playlist-item.playing-now .playlist-text {
+    color: #1db954;
+    font-weight: bold;
+}
+
+/* Selectionner le device */
+/* 1. LE CONTENEUR (Le fond noir) */
+.modal {
+    display: none; /* Changé en 'flex' par le JS */
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    
+    /* On force le centrage des deux axes */
+    justify-content: center;
+    align-items: center;
+}
+
+/* 2. LA BOÎTE (Le menu) */
+.modal-content {
+    background-color: #181818;
+    padding: 25px;
+    border: 1px solid #333;
+    width: 90%;
+    max-width: 450px;
+    border-radius: 12px;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+    
+    /* Sécurité supplémentaire pour le centrage */
+    margin: auto; 
+    
+    display: flex;
+    flex-direction: column;
+    max-height: 85vh;
+}
+
+/* 3. LA LISTE INTERNE (Pour scroller à l'intérieur de la boîte) */
+#deviceList {
+    overflow-y: auto;    /* Ajoute un scroll si la liste est longue */
+    margin: 15px 0;
+    padding-right: 5px;
+}
+
+/* 4. LES ITEMS DE LA LISTE (pour que ce soit joli) */
+.device-item {
+    padding: 15px;
+    margin: 10px 0;
+    background: #282828;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.device-item:hover {
+    background: #333;
+    border-color: #1db954;
+}
+
+.device-item.active {
+    background: #1db95422;
+    border-color: #1db954;
+    color: #1db954;
+    font-weight: bold;
+}
+
+body {
+    background-attachment: fixed; /* L'image ne bouge pas quand on scrolle */
+    background-size: cover;
+    background-position: center;
+    transition: background-image 0.8s ease-in-out; /* Transition douce */
+    background-color: #000;
+}
+
+/* On ajoute un flou sur tout le fond pour l'effet ambiance */
+/* Note: On utilise un pseudo-élément pour flouter le fond sans flouter le texte */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: inherit;
+    background-size: cover;
+    background-position: center;
+    filter: blur(60px) brightness(0.3); /* Ajuste le flou et la luminosité ici */
+    z-index: -1;
+}
+
+/* On s'assure que les cartes de chansons sont bien opaques pour masquer le fond */
+.song-card {
+    background-color: #181818; /* Ton noir habituel */
+    margin-bottom: 8px; /* C'est cet espace qui laissera voir le fond flou */
+    position: relative;
+    z-index: 1;
+}
+
+
+/* === PANNEAU PLAYLIST (SLIDE-IN) === */
+.playlist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.close-playlist-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #ccc;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.close-playlist-btn:hover {
+    color: white;
+}
+.playlist-btn {
+    background: #1db954;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    color: black;
+    font-weight: bold;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 8px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.playlist-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 5px rgba(29, 185, 84, 0.5);
+}
+/* === SECTION PC écran full HD 1920x1080 === */
+@media (min-width: 769px) {
+
+    /* On garde UN SEUL bloc ici */
+    .playlist-panel {
+        z-index: 4000;
+        position: fixed;
+        top: 0;
+        right: -600px; /* VALEUR A CHANGER (ex: -800px) */
+        width: 600px;   /* VALEUR A CHANGER (ex: 800px)  */
+        height: 100vh;
+        background: #181818;
+        border-left: 1px solid #333;
+        padding: 20px;
+        box-sizing: border-box;
+        transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* Zone scrollable interne (On la garde !) */
+    .playlist-scroll-zone {
+        flex: 1;
+        overflow-y: auto;
+        margin-top: 10px;
+        padding-right: 6px;
+        overscroll-behavior: contain;
+    }
+
+    #songList {
+        transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        margin-right: 0;
+        width: auto;
+    }
+
+    .playlist-panel.open {
+        right: 0;
+    }
+
+    /* L'EFFET ACCORDÉON */
+    body.playlist-is-open #songList {
+        margin-right: 600px; /* VALEUR A CHANGER (doit être égale à width) */
+    }
+}
+
+
+
+/* === SECTION MOBILE  === */
+@media (max-width: 768px) {
+    /* 1. PROTECTION DU BODY (Le site ne doit pas bouger horizontalement) */
+    html, body {
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+        position: relative;
+    }
+
+    /* 2. HEADER EN LIGNES (Ton réglage préféré qui fonctionne) */
+    .jukebox-header {
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 12px !important;
+        padding: 10px !important;
+    }
+
+    .header-left, .header-controls, .header-playlist, .header-progress, .header-right {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+
+    /* 3. PLAYLIST ÉTANCHE (Fixé sur les 4 coins de l'écran) */
+    .playlist-panel {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        
+        width: 100% !important;
+        height: 100dvh !important;
+        
+        background: #181818 !important;
+        z-index: 9999 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 15px !important;
+        box-sizing: border-box !important;
+
+        /* On utilise transform pour que ton bouton 3 soit fonctionnel */
+        transition: transform 0.3s ease-in-out !important;
+        transform: translateX(100%); /* Caché à droite par défaut */
+        visibility: hidden; /* Sécurité supplémentaire : invisible si pas ouvert */
+    }
+
+    /* Activation via ton bouton */
+    .playlist-panel.open {
+        transform: translateX(0) !important;
+        visibility: visible !important;
+    }
+
+    /* 4. CONTENU INTERNE (Zéro débordement pour S24) */
+    .playlist-header {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        flex-shrink: 0 !important;
+        margin-bottom: 10px;
+    }
+
+    .playlist-scroll-zone {
+        flex-grow: 1 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important; /* Interdit le scroll horizontal interne */
+        width: 100% !important;
+    }
+
+    .playlist-item {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 10px 5px !important;
+        border-bottom: 1px solid #222;
+    }
+
+    /* Empêche le texte long de pousser la poubelle hors écran */
+    .playlist-item span {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        flex-grow: 1 !important;
+        margin-right: 10px !important;
+    }
+
+    .delete-song-btn {
+        flex-shrink: 0 !important; /* La poubelle ne rétrécit jamais */
+    }
+
+    /* Boutons du bas (Actions) */
+    .playlist-actions {
+        flex-shrink: 0 !important;
+        display: flex !important;
+        justify-content: space-around !important;
+        padding: 15px 0 !important;
+        border-top: 1px solid #333;
+    }
 }
