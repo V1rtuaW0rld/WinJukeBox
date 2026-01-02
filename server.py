@@ -4,10 +4,39 @@ import sqlite3
 import uvicorn
 import json
 import time
+import random
+import ctypes   # <--- AJOUTÉ
+import asyncio  # <--- AJOUTÉ
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+
+# --- AJOUT: GESTION MISE EN VEILLE ---
+# Constantes Windows
+ES_CONTINUOUS = 0x80000000
+ES_SYSTEM_REQUIRED = 0x00000001
+ES_DISPLAY_REQUIRED = 0x00000002
+
+def set_keep_awake(enable=True):
+    """Active ou désactive le mode 'pas de veille'."""
+    try:
+        if enable:
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+            )
+        else:
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                ES_CONTINUOUS
+            )
+    except Exception as e:
+        print(f"Erreur gestion veille: {e}")
+
+# Variables pour le timer de veille
+last_music_time = time.time()
+TIMEOUT_DELAY = 5 * 60  # 5 minutes
+
+# -------------------------------------
 
 # 1. Création de l'application
 app = FastAPI()
@@ -26,8 +55,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MPV_PATH = os.path.join(BASE_DIR, "mpv.exe")
 DB_NAME = os.path.join(BASE_DIR, "jukebox.db")
 STATIC_PATH = os.path.join(BASE_DIR, "static")
-DEVICE_ID = "wasapi/Speakers (Jabra SPEAK 510 USB)"
 IPC_PIPE = r"\\.\pipe\mpv-juke"
+shuffle_mode = False 
+current_playing_id = None
+DEVICE_ID = "auto"
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -47,11 +78,64 @@ def read_mpv_property(prop):
     except:
         return None
 
+# --- AJOUT: TÂCHE DE FOND (BACKGROUND TASK) ---
+from contextlib import asynccontextmanager # <--- Ajoute cet import en haut du fichier
+
+# --- GESTION DU CYCLE DE VIE (LIFESPAN) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ce code s'exécute au DÉMARRAGE
+    monitor_task = asyncio.create_task(monitor_sleep_loop())
+    yield
+    # Ce code s'exécute à la FERMETURE
+    monitor_task.cancel() # Arrête la tâche de fond
+    set_keep_awake(False) # Rend la main à Windows
+    print("--- Surveillance de la veille désactivée ---")
+
+# --- MODIFICATION DE LA CRÉATION DE L'APP ---
+app = FastAPI(lifespan=lifespan)
+async def monitor_sleep_loop():
+    """Vérifie toutes les 10 secondes si la musique tourne"""
+    global last_music_time
+    print("--- Surveillance de la mise en veille activée ---")
+    
+    while True:
+        # On vérifie si MPV tourne et s'il n'est pas en pause
+        # read_mpv_property renvoie None si MPV est éteint, True si pause, False si lecture
+        is_paused = read_mpv_property("pause")
+        
+        # On considère que la musique joue SI : mpv répond (pas None) ET pause est Faux
+        is_playing = (is_paused is False)
+
+        current_time = time.time()
+
+        if is_playing:
+            # La musique joue : on reset le timer et on bloque la veille
+            last_music_time = current_time
+            set_keep_awake(True)
+            # print("Musique en cours - Veille Bloquée", end="\r") # Décommenter pour debug
+        else:
+            # La musique est arrêtée ou en pause
+            time_since_stop = current_time - last_music_time
+            
+            if time_since_stop < TIMEOUT_DELAY:
+                # Moins de 5 min : on bloque encore
+                set_keep_awake(True)
+                # print(f"Silence depuis {int(time_since_stop)}s - Veille Bloquée", end="\r")
+            else:
+                # Plus de 5 min : on libère Windows
+                set_keep_awake(False)
+                # print("Délai dépassé - Windows peut dormir", end="\r")
+
+        # On attend 10 secondes avant la prochaine vérification (sans bloquer le serveur)
+        await asyncio.sleep(10)
+
 # --- ROUTES ---
 
 @app.get("/")
 def read_index():
     return FileResponse(os.path.join(STATIC_PATH, "index.html"))
+    
 
 @app.get("/search")
 def search_songs(q: str = ""):
@@ -64,10 +148,41 @@ def search_songs(q: str = ""):
     conn.close()
     return {"songs": [{"id": s[0], "title": s[1], "artist": s[2]} for s in songs]}
 
+
+@app.get("/audio-devices")
+def get_audio_devices():
+    """Récupère la liste des noms 'FriendlyName' des sorties audio actives via PowerShell."""
+    cmd = 'powershell "Get-PnpDevice -Class AudioEndpoint -Status OK | Select-Object FriendlyName | ConvertTo-Json"'
+    try:
+        result = subprocess.check_output(cmd, shell=True).decode('utf-8')
+        if not result.strip():
+            return {"devices": []}
+            
+        data = json.loads(result)
+        # Gestion du cas où il n'y a qu'un seul périphérique (objet vs liste)
+        devices = [d['FriendlyName'] for d in (data if isinstance(data, list) else [data])]
+        return {"devices": devices}
+    except Exception as e:
+        print(f"Erreur audio-devices: {e}")
+        return {"error": str(e), "devices": []}
+
 @app.get("/play/{song_id}")
-def play_song(song_id: int):
-    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
+def play_song(song_id: int, device: str = None):
+    """Lance la lecture d'un morceau sur un périphérique spécifique."""
+    global current_playing_id, DEVICE_ID
     
+    # 1. Mise à jour de l'état global
+    current_playing_id = song_id
+    
+    # 2. Détermination du périphérique (Priorité au paramètre URL, sinon global)
+    # On utilise 'device' s'il est fourni, sinon la variable DEVICE_ID
+    target_device = device if device else DEVICE_ID
+
+    # 3. Arrêt propre des instances précédentes
+    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
+    time.sleep(0.4) # Temps de latence pour libérer le fichier et le driver audio
+
+    # 4. Recherche du fichier en BDD
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute("SELECT path FROM tracks WHERE id = ?", (song_id,))
@@ -82,13 +197,17 @@ def play_song(song_id: int):
             "--no-video",
             "--force-window=no",
             "--no-terminal",
-            f"--audio-device={DEVICE_ID}",
+            f"--audio-device={target_device}", # Utilisation du device dynamique
             f"--input-ipc-server={IPC_PIPE}",
             "--volume=70"
         ]
+
+        # 5. Lancement de MPV (sans fenêtre terminale)
         subprocess.Popen(args, creationflags=0x08000000)
-        return {"status": "playing"}
-    return {"status": "error"}
+        return {"status": "playing", "device_used": target_device}
+    
+    return {"status": "error", "message": "Song not found"}
+
 
 @app.get("/volume/{level}")
 def set_volume(level: int):
@@ -117,10 +236,280 @@ def set_position(position: int):
 
 @app.get("/status")
 def get_status():
+    global current_playing_id
     pos = read_mpv_property("time-pos") or 0
     duration = read_mpv_property("duration") or 0
     paused = read_mpv_property("pause") or False
-    return {"pos": pos, "duration": duration, "paused": paused}
+    
+    track_info = None
+    if current_playing_id:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        # On récupère les colonnes 1, 2 et 3 de votre table tracks
+        cur.execute("SELECT id, title, artist, album FROM tracks WHERE id = ?", (current_playing_id,))
+        res = cur.fetchone()
+        conn.close()
+        
+        if res:
+            track_info = {
+                "id": res[0], 
+                "title": res[1], 
+                "artist": res[2], 
+                "album": res[3]
+            }
+
+    # On renvoie l'objet 'track' dont le JavaScript a besoin
+    return {
+        "pos": pos, 
+        "duration": duration, 
+        "paused": paused, 
+        "track": track_info 
+    }
+
+# --- PLAYLIST ---
+@app.post("/playlist/add/{track_id}")
+def add_to_playlist(track_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    # Trouver la prochaine position
+    cur.execute("SELECT COALESCE(MAX(position), 0) + 1 FROM playlist")
+    pos = cur.fetchone()[0]
+
+    # Insérer seulement track_id + position
+    cur.execute("INSERT INTO playlist (track_id, position) VALUES (?, ?)", (track_id, pos))
+    conn.commit()
+
+    conn.close()
+    return {"status": "added"}
+
+
+@app.get("/playlist")
+def get_playlist():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT playlist.track_id, tracks.title, tracks.artist
+        FROM playlist
+        JOIN tracks ON playlist.track_id = tracks.id
+        ORDER BY playlist.position ASC
+    """)
+
+    songs = cur.fetchall()
+    conn.close()
+
+    return {"songs": [{"id": s[0], "title": s[1], "artist": s[2]} for s in songs]}
+
+
+@app.delete("/playlist/remove/{track_id}")
+def remove_from_playlist(track_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM playlist WHERE track_id = ?", (track_id,))
+    conn.commit()
+    conn.close()
+
+    return {"status": "removed"}
+
+# --- VIDER la PLAYLIST ---
+@app.delete("/playlist/clear")
+def clear_playlist():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM playlist")
+    conn.commit()
+    conn.close()
+    return {"status": "cleared"}
+
+# --- SHUFFLE ---
+# ACTIVER
+@app.post("/shuffle/enable")
+def enable_shuffle():
+    global shuffle_mode
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    # On récupère la playlist actuelle dans l'ordre
+    cur.execute("SELECT track_id FROM playlist ORDER BY position ASC")
+    rows = cur.fetchall()
+    track_ids = [r[0] for r in rows]
+
+    # On vide la shuffled_playlist
+    cur.execute("DELETE FROM shuffled_playlist")
+
+    if track_ids:
+        # Mélange sans remise
+        random.shuffle(track_ids)
+        # On réinsère avec une position 1..N
+        for idx, tid in enumerate(track_ids, start=1):
+            cur.execute(
+                "INSERT INTO shuffled_playlist (track_id, position) VALUES (?, ?)",
+                (tid, idx),
+            )
+
+    conn.commit()
+    conn.close()
+
+    shuffle_mode = True
+    return {"status": "enabled", "count": len(track_ids)}
+
+# DESACTIVER
+@app.post("/shuffle/disable")
+def disable_shuffle():
+    global shuffle_mode
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM shuffled_playlist")
+    conn.commit()
+    conn.close()
+
+    shuffle_mode = False
+    return {"status": "disabled"}
+
+#SHUFFLE Status
+@app.get("/shuffle/status")
+def shuffle_status():
+    return {"shuffle": shuffle_mode}
+
+
+# Route pour obtenir la prochaine chanson
+from fastapi import Query
+# --- NEXT ---
+@app.get("/next")
+def get_next(current_id: int = Query(0)):
+    """
+    Renvoie la prochaine chanson à jouer.
+    - Si shuffle_mode = True : lit dans shuffled_playlist
+    - Sinon : lit dans playlist
+    current_id = id de la chanson en cours (0 si aucune)
+    """
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    global shuffle_mode
+
+    if shuffle_mode:
+        table = "shuffled_playlist"
+    else:
+        table = "playlist"
+
+    # Si aucune chanson en cours, on renvoie la première
+    if current_id == 0:
+        cur.execute(f"""
+            SELECT {table}.track_id
+            FROM {table}
+            ORDER BY {table}.position ASC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return {"id": row[0]}
+        return {"id": None}
+
+    # On cherche la position de la chanson actuelle
+    cur.execute(f"""
+        SELECT position FROM {table}
+        WHERE track_id = ?
+    """, (current_id,))
+    res = cur.fetchone()
+
+    if not res:
+        conn.close()
+        return {"id": None}
+
+    current_pos = res[0]
+
+    # On cherche la suivante
+    cur.execute(f"""
+        SELECT track_id
+        FROM {table}
+        WHERE position > ?
+        ORDER BY position ASC
+        LIMIT 1
+    """, (current_pos,))
+    next_row = cur.fetchone()
+    conn.close()
+
+    if next_row:
+        return {"id": next_row[0]}
+    else:
+        return {"id": None}
+
+# --- PREVIOUS ---
+@app.get("/previous")
+def get_previous(current_id: int = Query(0)):
+    """
+    Renvoie la chanson précédente selon le mode :
+    - shuffle_mode = True → shuffled_playlist
+    - sinon → playlist
+    """
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    global shuffle_mode
+
+    table = "shuffled_playlist" if shuffle_mode else "playlist"
+
+    # Si aucune chanson en cours → renvoyer la dernière
+    if current_id == 0:
+        cur.execute(f"""
+            SELECT track_id
+            FROM {table}
+            ORDER BY position DESC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        conn.close()
+        return {"id": row[0] if row else None}
+
+    # Trouver la position actuelle
+    cur.execute(f"""
+        SELECT position FROM {table}
+        WHERE track_id = ?
+    """, (current_id,))
+    res = cur.fetchone()
+
+    if not res:
+        conn.close()
+        return {"id": None}
+
+    current_pos = res[0]
+
+    # Trouver la précédente
+    cur.execute(f"""
+        SELECT track_id
+        FROM {table}
+        WHERE position < ?
+        ORDER BY position DESC
+        LIMIT 1
+    """, (current_pos,))
+    prev_row = cur.fetchone()
+    conn.close()
+
+    return {"id": prev_row[0] if prev_row else None}
+
+
+
+#récupérer les covers
+@app.get("/cover/{track_id}")
+async def get_cover(track_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # On récupère le chemin de la pochette pour ce morceau
+    cursor.execute("SELECT cover_path FROM tracks WHERE id = ?", (track_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row and row[0]:
+        cover_path = row[0]
+        if os.path.exists(cover_path):
+            return FileResponse(cover_path)
+    
+    # Si pas d'image, on envoie une image par défaut
+    return FileResponse("static/default_cover.png")
 
 # Montage des fichiers statiques
 app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
