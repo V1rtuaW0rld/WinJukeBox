@@ -235,73 +235,56 @@ async function updateStatus() {
         if (!response.ok) return;
         const data = await response.json();
 
-        // --- 1. MISE À JOUR DES INFOS DANS LE HEADER ET L'AMBIANCE ---
-if (data.track) {
-    // CONDITION CRUCIALE : On ne fait rien si c'est la même chanson qu'avant
-    if (data.track.id !== currentTrackId) {
-        
-        const elHeader = document.querySelector(".jukebox-header");
-        const elCover = document.getElementById("current-cover");
-        const nextSrc = `/cover/${data.track.id}`;
-        const timestamp = new Date().getTime();
-        const fullImageUrl = `url("${nextSrc}?t=${timestamp}")`;
+        // --- 1. MISE À JOUR DES INFOS (HEADER & TEXTES) ---
+        if (data.track) {
+            const elTitle = document.getElementById("trackTitle");
+            const elArtist = document.getElementById("trackArtist");
+            const elAlbum = document.getElementById("trackAlbum");
+            
+            // On vérifie si le texte affiché correspond au morceau réel
+            // Si ça diffère, on force la mise à jour des textes
+            if (elTitle && elTitle.innerText !== data.track.title) {
+                elTitle.innerText = data.track.title || "---";
+                if (elArtist) elArtist.innerText = data.track.artist || "---";
+                if (elAlbum) elAlbum.innerText = data.track.album || "";
+            }
 
-        // Mise à jour du fond de page (interstices) - Une seule fois par titre
-        document.body.style.backgroundImage = fullImageUrl;
+            // MISE À JOUR DE L'AMBIANCE VISUELLE (Image)
+            // On ne change l'image que si l'ID a vraiment changé pour éviter le clignotement
+            if (data.track.id !== currentTrackId) {
+                const elHeader = document.querySelector(".jukebox-header");
+                const elCover = document.getElementById("current-cover");
+                const nextSrc = `/cover/${data.track.id}`;
+                const timestamp = new Date().getTime();
+                const fullImageUrl = `url("${nextSrc}?t=${timestamp}")`;
 
-        // Mise à jour du header - Une seule fois par titre
-        if (elHeader) {
-            elHeader.style.backgroundImage = fullImageUrl;
+                document.body.style.backgroundImage = fullImageUrl;
+                if (elHeader) elHeader.style.backgroundImage = fullImageUrl;
+                if (elCover) elCover.src = `${nextSrc}?t=${timestamp}`;
+
+                // On met à jour l'ID global une fois que tout est fait
+                currentTrackId = data.track.id;
+            }
         }
-
-        // Mise à jour de la vignette
-        if (elCover) {
-            elCover.src = `${nextSrc}?t=${timestamp}`;
-        }
-
-        // Mise à jour des textes
-        const elTitle = document.getElementById("trackTitle");
-        const elArtist = document.getElementById("trackArtist");
-        const elAlbum = document.getElementById("trackAlbum");
-        
-        if (elTitle) elTitle.innerText = data.track.title || "---";
-        if (elArtist) elArtist.innerText = data.track.artist || "---";
-        if (elAlbum) elAlbum.innerText = data.track.album || "";
-
-        // On enregistre le nouvel ID pour bloquer les prochaines mises à jour inutiles
-        currentTrackId = data.track.id;
-    }
-}
 
         // --- 2. GESTION DU HIGHLIGHT DANS LA PLAYLIST ---
         const allItems = document.querySelectorAll(".playlist-item");
         allItems.forEach(item => {
-            const isCurrent = (data.track && item.dataset.id == data.track.id);
-            if (isCurrent) {
-                if (!item.classList.contains("playing-now")) {
-                    item.classList.add("playing-now");
-                }
-            } else {
-                item.classList.remove("playing-now");
-            }
+            const isCurrent = (data.track && Number(item.dataset.id) === data.track.id);
+            item.classList.toggle("playing-now", isCurrent);
         });
 
         // --- 3. BARRE DE PROGRESSION & TEMPS ---
         const currentTxt = document.getElementById("currentTime");
         const totalTxt = document.getElementById("totalTime");
-        const btn = document.getElementById("pauseBtn");
-
-        // On s'assure que le slider existe
-        if (!slider) {
-            slider = document.getElementById("progressSlider");
-        }
+        
+        if (!slider) slider = document.getElementById("progressSlider");
 
         if (slider) {
             if (data.duration > 0) {
                 slider.max = Math.floor(data.duration);
                 if (totalTxt) totalTxt.innerText = formatTime(data.duration);
             }
-
             if (!isDragging) {
                 slider.value = Math.floor(data.pos || 0);
                 if (currentTxt) currentTxt.innerText = formatTime(data.pos || 0);
@@ -309,14 +292,10 @@ if (data.track) {
         }
 
         // --- 4. ÉTAT DU BOUTON PAUSE ---
+        const btn = document.getElementById("pauseBtn");
         if (btn) {
-            if (data.paused) {
-                btn.classList.remove("paused");
-                btn.classList.add("playing");
-            } else {
-                btn.classList.remove("playing");
-                btn.classList.add("paused");
-            }
+            btn.classList.toggle("paused", data.paused);
+            btn.classList.toggle("playing", !data.paused);
         }
 
     } catch (err) {
@@ -413,41 +392,6 @@ function refreshPlaylistUI() {
     });
 }
 
-/* Enchaînement automatique des chansons */
-function startPlaylistWatcher() {
-    setInterval(async () => {
-        if (!isPlaylistMode || playlist.length === 0) return;
-
-        try {
-            const res = await fetch("/status");
-            const data = await res.json();
-
-            const pos = Number(data.pos || 0);
-            const duration = Number(data.duration || 0);
-
-            if (duration > 0 && pos >= duration - 1.5) {
-        try {
-            const resNext = await fetch(`/next?current_id=${currentTrackId || 0}`);
-            const nextData = await resNext.json();
-	    
-            if (nextData && nextData.id) {
-                isPlaylistMode = true; // on reste en mode playlist/shuffle
-                await play(nextData.id);
-            } else {
-                // plus de morceau à lire
-                isPlaylistMode = false;
-                currentPlaylistIndex = -1;
-            }
-    } catch (e) {
-        console.warn("Erreur /next", e);
-    }
-}
-
-        } catch (e) {
-            console.warn("Erreur de polling /status", e);
-        }
-    }, 1000);
-}
 
 /* Initialisation du panneau playlist */
 function initPlaylistPanel() {
@@ -523,7 +467,6 @@ function initPlaylistPanel() {
     });
 
     loadPlaylistFromServer();
-    startPlaylistWatcher();
     refreshShuffleStatus();
 }
 

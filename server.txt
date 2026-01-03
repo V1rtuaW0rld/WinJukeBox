@@ -95,50 +95,40 @@ async def lifespan(app: FastAPI):
 # --- MODIFICATION DE LA CRÉATION DE L'APP ---
 app = FastAPI(lifespan=lifespan)
 async def monitor_sleep_loop():
-    """Surveille la veille et enchaîne les chansons automatiquement"""
-    global last_music_time, current_playing_id
-    print("--- Surveillance Veille & Auto-Next activée ---")
+    """Vérifie toutes les 10 secondes si la musique tourne"""
+    global last_music_time
+    print("--- Surveillance de la mise en veille activée ---")
     
     while True:
-        # 1. On récupère l'état de MPV
-        # pos sera un nombre si ça joue, ou None si MPV est fermé
-        pos = read_mpv_property("time-pos")
+        # On vérifie si MPV tourne et s'il n'est pas en pause
+        # read_mpv_property renvoie None si MPV est éteint, True si pause, False si lecture
         is_paused = read_mpv_property("pause")
+        
+        # On considère que la musique joue SI : mpv répond (pas None) ET pause est Faux
+        is_playing = (is_paused is False)
+
         current_time = time.time()
 
-        # --- PARTIE 1 : GESTION DE LA VEILLE ---
-        # On considère que la musique joue si MPV est ouvert ET pas en pause
-        is_playing = (pos is not None and is_paused is False)
-
         if is_playing:
+            # La musique joue : on reset le timer et on bloque la veille
             last_music_time = current_time
-            set_keep_awake(True) # Interdire la veille
+            set_keep_awake(True)
+            # print("Musique en cours - Veille Bloquée", end="\r") # Décommenter pour debug
         else:
-            # Si musique arrêtée, on attend le délai de 5 min (TIMEOUT_DELAY)
-            if (current_time - last_music_time) < TIMEOUT_DELAY:
-                set_keep_awake(True)
-            else:
-                set_keep_awake(False) # Autoriser la veille
-
-        # --- PARTIE 2 : ENCHAÎNEMENT AUTOMATIQUE (AUTO-NEXT) ---
-        # Si pos est None, cela veut dire que MPV s'est arrêté (chanson finie)
-        # Mais current_playing_id nous dit qu'une chanson était censée jouer
-        if pos is None and current_playing_id is not None:
-            print(f"Chanson finie. Recherche de la suivante après l'ID {current_playing_id}...")
+            # La musique est arrêtée ou en pause
+            time_since_stop = current_time - last_music_time
             
-            # On appelle la logique de ta route /next pour trouver l'ID suivant
-            next_song = get_next(current_playing_id)
-            next_id = next_song.get("id")
-
-            if next_id:
-                print(f"Enchaînement auto vers ID: {next_id}")
-                play_song(next_id) # On lance la lecture de la suivante
+            if time_since_stop < TIMEOUT_DELAY:
+                # Moins de 5 min : on bloque encore
+                set_keep_awake(True)
+                # print(f"Silence depuis {int(time_since_stop)}s - Veille Bloquée", end="\r")
             else:
-                print("Fin de la playlist ou aucune chanson suivante trouvée.")
-                current_playing_id = None # On remet à zéro pour ne pas boucler dans le vide
+                # Plus de 5 min : on libère Windows
+                set_keep_awake(False)
+                # print("Délai dépassé - Windows peut dormir", end="\r")
 
-        # On vérifie toutes les 5 secondes (plus réactif pour l'enchaînement)
-        await asyncio.sleep(5)
+        # On attend 10 secondes avant la prochaine vérification (sans bloquer le serveur)
+        await asyncio.sleep(10)
 
 # --- ROUTES ---
 
@@ -255,20 +245,20 @@ def get_status():
     if current_playing_id:
         conn = sqlite3.connect(DB_NAME)
         cur = conn.cursor()
-        # On s'assure de bien récupérer l'ID pour construire l'URL de la cover
+        # On récupère les colonnes 1, 2 et 3 de votre table tracks
         cur.execute("SELECT id, title, artist, album FROM tracks WHERE id = ?", (current_playing_id,))
         res = cur.fetchone()
         conn.close()
         
         if res:
             track_info = {
-                "id": int(res[0]),  # On force en INT pour le JS
+                "id": res[0], 
                 "title": res[1], 
                 "artist": res[2], 
-                "album": res[3],
-                "cover_url": f"/cover/{res[0]}" 
+                "album": res[3]
             }
 
+    # On renvoie l'objet 'track' dont le JavaScript a besoin
     return {
         "pos": pos, 
         "duration": duration, 
