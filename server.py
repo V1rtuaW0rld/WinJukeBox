@@ -5,8 +5,8 @@ import uvicorn
 import json
 import time
 import random
-import ctypes   # <--- AJOUTÉ
-import asyncio  # <--- AJOUTÉ
+import ctypes
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

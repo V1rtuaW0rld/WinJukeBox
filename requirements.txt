@@ -2,3 +2,4 @@ mutagen
 fastapi
 uvicorn
 python-mpv-jsonipc
+tqdm

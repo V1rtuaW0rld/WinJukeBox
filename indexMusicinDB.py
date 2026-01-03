@@ -45,6 +45,34 @@ def init_db():
     return conn
 
 
+def find_cover(root):
+    """
+    Recherche une cover dans le dossier courant,
+    puis dans le dossier parent si rien n'est trouvé.
+    """
+    COVER_NAMES = ['cover.jpg', 'cover.png', 'folder.jpg', 'front.jpg']
+
+    # 1) Recherche dans le dossier courant
+    try:
+        for f in os.listdir(root):
+            if f.lower() in COVER_NAMES or f.lower().endswith(".jpg") or f.lower().endswith(".png"):
+                return os.path.join(root, f)
+    except Exception as e:
+        logging.warning(f"Impossible de lire le dossier {root}: {e}")
+
+    # 2) Recherche dans le dossier parent
+    parent = os.path.dirname(root)
+    if parent and parent != root:
+        try:
+            for f in os.listdir(parent):
+                if f.lower() in COVER_NAMES or f.lower().endswith(".jpg") or f.lower().endswith(".png"):
+                    return os.path.join(parent, f)
+        except Exception as e:
+            logging.warning(f"Impossible de lire le dossier parent {parent}: {e}")
+
+    return None
+
+
 def scan_music():
     logging.info(f"Scan en cours de {MUSIC_FOLDER}...")
 
@@ -69,14 +97,7 @@ def scan_music():
         full_path = os.path.join(root, file)
 
         # Détection de la couverture
-        current_cover = None
-        try:
-            for f in os.listdir(root):
-                if f.lower() in ['cover.jpg', 'cover.png', 'folder.jpg', 'front.jpg']:
-                    current_cover = os.path.join(root, f)
-                    break
-        except Exception as e:
-            logging.warning(f"Impossible de lire le dossier {root}: {e}")
+        current_cover = find_cover(root)
 
         # Valeurs par défaut
         artist = "Artiste Inconnu"
