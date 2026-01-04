@@ -151,12 +151,15 @@ def read_index():
 def search_songs(q: str = ""):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    query = "SELECT id, title, artist FROM tracks WHERE title LIKE ? OR artist LIKE ? ORDER BY title ASC"
+    # On ajoute 'album' dans le SELECT
+    query = "SELECT id, title, artist, album FROM tracks WHERE title LIKE ? OR artist LIKE ? ORDER BY title ASC"
     term = f"%{q}%"
     cur.execute(query, (term, term))
     songs = cur.fetchall()
     conn.close()
-    return {"songs": [{"id": s[0], "title": s[1], "artist": s[2]} for s in songs]}
+    
+    # On ajoute l'album dans le dictionnaire retourné
+    return {"songs": [{"id": s[0], "title": s[1], "artist": s[2], "album": s[3]} for s in songs]}
 
 
 @app.get("/audio-devices")

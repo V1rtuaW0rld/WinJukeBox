@@ -25,17 +25,25 @@ async function doSearch() {
             const card = document.createElement("div");
             card.className = "song-card";
 
+            // --- PRÉPARATION DU TEXTE DE L'ALBUM ---
+            // Si song.album existe, on ajoute " > Nom de l'album", sinon rien.
+            const albumInfo = song.album ? ` > ${song.album}` : "";
+
             card.innerHTML = `
                 <div class="song-info">
-                    <strong>${song.title}</strong><br>
-                    <small style="color:#b3b3b3">${song.artist}</small>
-                </div>
+                  <div class="song-title">${song.title}</div>
+                    <div class="song-subtext">
+                    <span class="song-artist">${song.artist}</span>
+                    <span class="song-album">${albumInfo}</span>
+                    </div>
+                  </div>
                 <div class="song-actions">
                     <button
                         class="add-to-playlist-btn"
                         data-id="${song.id}"
                         data-title="${song.title.replace(/"/g, '&quot;')}"
                         data-artist="${song.artist.replace(/"/g, '&quot;')}"
+                        data-album="${(song.album || "").replace(/"/g, '&quot;')}"
                     >➕</button>
                     <button class="play-btn" data-id="${song.id}">▶</button>
                 </div>
@@ -294,9 +302,17 @@ async function updateStatus() {
         // --- 4. ÉTAT DU BOUTON PAUSE ---
         const btn = document.getElementById("pauseBtn");
         if (btn) {
-            btn.classList.toggle("paused", data.paused);
-            btn.classList.toggle("playing", !data.paused);
+         // Si data.paused est vrai, la musique est arrêtée : on affiche "Play"
+        if (data.paused) {
+        btn.classList.add("paused");
+        btn.classList.remove("playing");
+        } 
+        // Sinon, la musique joue : on affiche "Pause"
+        else {
+        btn.classList.add("playing");
+        btn.classList.remove("paused");
         }
+}
 
     } catch (err) {
         console.error("Erreur updateStatus:", err);
@@ -402,6 +418,14 @@ function initPlaylistPanel() {
     const shufflePlaylistBtn = document.getElementById("shufflePlaylistBtn");
     const nextBtn = document.getElementById("nextBtn");
     const prevBtn = document.getElementById("prevBtn");
+    const clearPlaylistBtn = document.getElementById("clearPlaylistBtn");
+
+    if (clearPlaylistBtn) {
+    clearPlaylistBtn.addEventListener("click", async () => {
+        await fetch("/playlist/clear", { method: "DELETE" });
+        loadPlaylistFromServer();
+    });
+    }
     
     if (openPlaylistBtn && playlistPanel) {
         openPlaylistBtn.addEventListener("click", () => {
@@ -522,15 +546,7 @@ async function toggleShuffle() {
     }
 }
 
-/* Bouton action en bas du panneau playlist */
-const clearPlaylistBtn = document.getElementById("clearPlaylistBtn");
 
-if (clearPlaylistBtn) {
-    clearPlaylistBtn.addEventListener("click", async () => {
-        await fetch("/playlist/clear", { method: "DELETE" });
-        loadPlaylistFromServer();
-    });
-}
 /**
  * ---------------------------------------------------------
  *  INITIALISATION GLOBALE

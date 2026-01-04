@@ -127,12 +127,13 @@ body {
 }
 
 #pauseBtn.playing {
-    background-image: url('/static/icons/play.png') !important;
+    background-image: url('/static/icons/pause.png') !important;
+        background-size: 75% !important;
 }
 
 #pauseBtn.paused {
-    background-image: url('/static/icons/pause.png') !important;
-    background-size: 75% !important;
+    background-image: url('/static/icons/play.png') !important;
+
 }
 
 #pauseBtn:active {
@@ -269,6 +270,24 @@ body {
     line-height: 0;
 }
 
+/* Style pour l'artiste et l'album */
+.song-subtext {
+    font-size: 0.85rem;
+    color: #a7a7a7; /* Un gris un peu plus doux */
+    margin-top: 5px;
+    letter-spacing: 0.3px; /* Un peu plus d'espace entre les lettres pour la clarté */
+}
+
+/* le symbole '>' ressort un peu moins que le texte */
+.song-subtext span {
+    vertical-align: middle;
+}
+
+/* Optionnel : mettre l'album en blanc très léger pour le différencier de l'artiste */
+.song-album {
+    color: #efefef;
+    opacity: 0.6;
+}
 
 /* === REGLAGE AMBIANCE INTERSTICES (Correction de ta ligne coupée à la fin) === */
 body {
@@ -290,7 +309,7 @@ body::before {
     z-index: -1;
 }
 
-
+/* === ITEM du volet PLAYLIST === */
 #playlistItems {
     list-style: none;
     padding: 0;
