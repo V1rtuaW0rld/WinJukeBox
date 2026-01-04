@@ -39,34 +39,59 @@ async function doSearch() {
             return;
         }
 
-        data.songs.forEach(song => {
-            const card = document.createElement("div");
-            card.className = "song-card";
-            const albumInfo = song.album ? ` > ${song.album}` : "";
-            
-            // On nettoie les guillemets pour éviter les bugs HTML
-            const cleanTitle = song.title.replace(/"/g, '&quot;');
-            const cleanArtist = song.artist.replace(/"/g, '&quot;');
-            const cleanAlbum = (song.album || "").replace(/"/g, '&quot;');
+            data.songs.forEach(song => {
+    const card = document.createElement("div");
+    const isGroupMode = (currentSearchMode === 'artist' || currentSearchMode === 'album');
+    card.className = isGroupMode ? "song-card album-card-container" : "song-card";
 
-            card.innerHTML = `
-                <div class="song-info">
-                    <div class="song-title">${song.title}</div>
-                    <div class="song-subtext">
-                        <span class="song-artist">${song.artist}</span>
-                        <span class="song-album">${albumInfo}</span>
+    const cleanTitle = song.title.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    const cleanArtist = song.artist.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    const cleanAlbum = (song.album || "").replace(/"/g, '&quot;').replace(/'/g, "\\'");
+
+    if (isGroupMode) {
+        card.innerHTML = `
+            <div class="album-card-content" style="display: flex; flex-direction: column; width: 100%;">
+                <div class="album-header" style="display: flex; align-items: flex-start; padding: 10px;">
+                    <span class="expand-icon" 
+                          style="cursor:pointer; margin-right:15px; font-size:1.2em; color:#1db954; padding-top: 5px;" 
+                          onclick="toggleAlbum('${cleanAlbum}', '${cleanArtist}', this)">▶</span>
+                    
+                    <div class="album-identity" style="display: flex; flex-direction: column; flex-grow: 1;">
+                        <div class="song-title" style="color: #1db954; font-weight: bold; font-size: 1.1em; margin-bottom: 4px;">💿 ${song.album}</div>
+                        <div class="song-subtext" style="margin-bottom: 10px;">${song.artist}</div>
+                        
+                        <button class="add-album-btn" 
+                                style="width: fit-content; background:#1db954; color:white; border:none; border-radius:12px; padding:4px 12px; font-size:0.8em; cursor:pointer; display: flex; align-items: center;"
+                                onclick="addFullAlbum('${cleanAlbum}', '${cleanArtist}')">
+                            <span style="margin-right:5px;">➕</span> TOUT AJOUTER
+                        </button>
                     </div>
                 </div>
-                <div class="song-actions">
-                    <button class="add-to-playlist-btn" 
-                        data-id="${song.id}" 
-                        data-title="${cleanTitle}" 
-                        data-artist="${cleanArtist}" 
-                        data-album="${cleanAlbum}">➕</button>
-                    <button class="play-btn" data-id="${song.id}">▶</button>
-                </div>`;
-            list.appendChild(card);
-        });
+                
+                <div class="album-details" style="display: none; width: 100%; margin-top: 5px; padding-left: 45px; border-left: 2px solid #1db954; background: rgba(255,255,255,0.03);">
+                </div>
+            </div>`;
+    } else {
+        const albumInfo = song.album ? ` > ${song.album}` : "";
+        card.innerHTML = `
+            <div class="song-info">
+                <div class="song-title">${song.title}</div>
+                <div class="song-subtext">
+                    <span class="song-artist">${song.artist}</span>
+                    <span class="song-album">${albumInfo}</span>
+                </div>
+            </div>
+            <div class="song-actions">
+                <button class="add-to-playlist-btn" 
+                    data-id="${song.id}" 
+                    data-title="${cleanTitle}" 
+                    data-artist="${cleanArtist}" 
+                    data-album="${cleanAlbum}">➕</button>
+                <button class="play-btn" data-id="${song.id}">▶</button>
+            </div>`;
+    }
+    list.appendChild(card);
+});
 
     } catch (err) {
         console.error(err);
@@ -75,6 +100,69 @@ async function doSearch() {
     }
 }
 
+
+async function toggleAlbum(albumName, artistName, element) {
+    const detailDiv = element.closest('.album-card-container').querySelector('.album-details');
+    
+    if (detailDiv.style.display === 'block') {
+        detailDiv.style.display = 'none';
+        element.innerText = '▶';
+        return;
+    }
+
+    if (detailDiv.innerHTML.trim() === "") {
+        try {
+            const url = `/album_tracks?album=${encodeURIComponent(albumName)}&artist=${encodeURIComponent(artistName)}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.tracks && data.tracks.length > 0) {
+                let html = "";
+                data.tracks.forEach(track => {
+    const cleanT = track.title.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    
+    html += `
+        <div class="track-item" style="padding: 10px 30px 10px 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #ccc;">${track.title}</span>
+            
+            <div class="song-actions" style="display: flex; gap: 10px;">
+                <button class="add-to-playlist-btn" 
+                        data-id="${track.id}" 
+                        data-title="${cleanT}" 
+                        data-artist="${artistName.replace(/'/g, "\\'")}" 
+                        data-album="${albumName.replace(/'/g, "\\'")}">➕</button>
+                
+                <button class="play-btn" data-id="${track.id}">▶</button>
+            </div>
+        </div>`;
+});
+                detailDiv.innerHTML = html;
+            }
+        } catch (err) {
+            console.error("Erreur:", err);
+        }
+    }
+
+    detailDiv.style.display = 'block';
+    element.innerText = '▼';
+}
+async function addFullAlbum(albumName, artistName) {
+    // 1. On demande au Python la liste des morceaux (il sait déjà le faire)
+    const response = await fetch(`/album_tracks?album=${encodeURIComponent(albumName)}&artist=${encodeURIComponent(artistName)}`);
+    const data = await response.json();
+    
+    if (data.tracks && data.tracks.length > 0) {
+        // 2. Pour chaque morceau reçu, on appelle la route d'ajout individuelle
+        for (const track of data.tracks) {
+            // On attend chaque ajout pour ne pas saturer le serveur Python
+            await fetch(`/playlist/add/${track.id}`, { method: "POST" });
+        }
+        
+        // 3. Une fois fini, on rafraîchit la vue de la playlist
+        loadPlaylistFromServer();
+        alert(`L'album "${albumName}" a été ajouté à la playlist.`);
+    }
+}
 /**
  * ---------------------------------------------------------
  * COMMANDES SERVEUR & GESTION AUDIO DYNAMIQUE

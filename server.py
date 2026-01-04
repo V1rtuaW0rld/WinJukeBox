@@ -147,28 +147,38 @@ async def monitor_sleep_loop():
 def read_index():
     return FileResponse(os.path.join(STATIC_PATH, "index.html"))
     
-#Recherche par titre
+# Moteur de recherche principal
 @app.get("/search")
 def search_songs(q: str = "", mode: str = "title"):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     term = f"%{q}%"
     
-    # --- BRANCHEMENT FUTUR ---
-    # Ici, on prépare le terrain. Si c'est 'title', on garde ta logique.
-    # Pour l'instant, on redirige tout vers ta requête actuelle.
-    
     if mode == "artist":
-        # Plus tard : query = "SELECT ... WHERE artist LIKE ?"
-        query = "SELECT id, title, artist, album FROM tracks WHERE artist LIKE ? ORDER BY artist ASC, title ASC"
+        # On groupe par album pour n'avoir qu'une ligne par disque
+        # On utilise MIN(id) pour avoir un ID de référence pour la carte
+        query = """SELECT MIN(id), album, artist, album 
+                   FROM tracks 
+                   WHERE artist LIKE ? 
+                   GROUP BY album 
+                   ORDER BY album ASC"""
         cur.execute(query, (term,))
+        
     elif mode == "album":
-        # Plus tard : query = "SELECT ... WHERE album LIKE ?"
-        query = "SELECT id, title, artist, album FROM tracks WHERE album LIKE ? ORDER BY album ASC, title ASC"
+        # Même logique : on veut voir les albums qui correspondent à la recherche
+        query = """SELECT MIN(id), album, artist, album 
+                   FROM tracks 
+                   WHERE album LIKE ? 
+                   GROUP BY album, artist 
+                   ORDER BY album ASC"""
         cur.execute(query, (term,))
+        
     else:
-        # Mode par défaut : Titre (ta requête d'origine légèrement optimisée)
-        query = "SELECT id, title, artist, album FROM tracks WHERE title LIKE ? OR artist LIKE ? ORDER BY title ASC"
+        # Mode titre : on garde l'affichage individuel de chaque chanson
+        query = """SELECT id, title, artist, album 
+                   FROM tracks 
+                   WHERE title LIKE ? OR artist LIKE ? 
+                   ORDER BY title ASC"""
         cur.execute(query, (term, term))
 
     songs = cur.fetchall()
@@ -176,19 +186,18 @@ def search_songs(q: str = "", mode: str = "title"):
     
     return {"songs": [{"id": s[0], "title": s[1], "artist": s[2], "album": s[3]} for s in songs]}
 
-#Recherche par album
+# Route pour le déploiement (le contenu de l'album)
 @app.get("/album_tracks")
 def get_album_tracks(album: str, artist: str):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    # On récupère toutes les pistes de cet album précis
-    query = """SELECT id, title, artist, album FROM tracks 
-               WHERE album = ? AND artist = ? 
-               ORDER BY id ASC""" # Ou par track_number si tu l'as
+    # On utilise exactement le nom de l'album et de l'artiste
+    query = "SELECT id, title, artist, album FROM tracks WHERE album = ? AND artist = ? ORDER BY id ASC"
     cur.execute(query, (album, artist))
     tracks = cur.fetchall()
     conn.close()
     return {"tracks": [{"id": t[0], "title": t[1], "artist": t[2], "album": t[3]} for t in tracks]}
+
 
 @app.get("/audio-devices")
 def get_audio_devices():
