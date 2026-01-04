@@ -59,6 +59,7 @@ IPC_PIPE = r"\\.\pipe\mpv-juke"
 shuffle_mode = False 
 current_playing_id = None
 DEVICE_ID = "auto"
+current_volume = 70
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -146,21 +147,48 @@ async def monitor_sleep_loop():
 def read_index():
     return FileResponse(os.path.join(STATIC_PATH, "index.html"))
     
-
+#Recherche par titre
 @app.get("/search")
-def search_songs(q: str = ""):
+def search_songs(q: str = "", mode: str = "title"):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    # On ajoute 'album' dans le SELECT
-    query = "SELECT id, title, artist, album FROM tracks WHERE title LIKE ? OR artist LIKE ? ORDER BY title ASC"
     term = f"%{q}%"
-    cur.execute(query, (term, term))
+    
+    # --- BRANCHEMENT FUTUR ---
+    # Ici, on prépare le terrain. Si c'est 'title', on garde ta logique.
+    # Pour l'instant, on redirige tout vers ta requête actuelle.
+    
+    if mode == "artist":
+        # Plus tard : query = "SELECT ... WHERE artist LIKE ?"
+        query = "SELECT id, title, artist, album FROM tracks WHERE artist LIKE ? ORDER BY artist ASC, title ASC"
+        cur.execute(query, (term,))
+    elif mode == "album":
+        # Plus tard : query = "SELECT ... WHERE album LIKE ?"
+        query = "SELECT id, title, artist, album FROM tracks WHERE album LIKE ? ORDER BY album ASC, title ASC"
+        cur.execute(query, (term,))
+    else:
+        # Mode par défaut : Titre (ta requête d'origine légèrement optimisée)
+        query = "SELECT id, title, artist, album FROM tracks WHERE title LIKE ? OR artist LIKE ? ORDER BY title ASC"
+        cur.execute(query, (term, term))
+
     songs = cur.fetchall()
     conn.close()
     
-    # On ajoute l'album dans le dictionnaire retourné
     return {"songs": [{"id": s[0], "title": s[1], "artist": s[2], "album": s[3]} for s in songs]}
 
+#Recherche par album
+@app.get("/album_tracks")
+def get_album_tracks(album: str, artist: str):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    # On récupère toutes les pistes de cet album précis
+    query = """SELECT id, title, artist, album FROM tracks 
+               WHERE album = ? AND artist = ? 
+               ORDER BY id ASC""" # Ou par track_number si tu l'as
+    cur.execute(query, (album, artist))
+    tracks = cur.fetchall()
+    conn.close()
+    return {"tracks": [{"id": t[0], "title": t[1], "artist": t[2], "album": t[3]} for t in tracks]}
 
 @app.get("/audio-devices")
 def get_audio_devices():
@@ -210,9 +238,9 @@ def play_song(song_id: int, device: str = None):
             "--no-video",
             "--force-window=no",
             "--no-terminal",
-            f"--audio-device={target_device}", # Utilisation du device dynamique
+            f"--audio-device={target_device}",
             f"--input-ipc-server={IPC_PIPE}",
-            "--volume=70"
+            f"--volume={current_volume}" # On utilise la variable mémorisée ici !
         ]
 
         # 5. Lancement de MPV (sans fenêtre terminale)
@@ -224,8 +252,10 @@ def play_song(song_id: int, device: str = None):
 
 @app.get("/volume/{level}")
 def set_volume(level: int):
-    run_mpv_command(["set_property", "volume", int(level)])
-    return {"volume": level}
+    global current_volume
+    current_volume = int(level) # On mémorise le nouveau volume
+    run_mpv_command(["set_property", "volume", current_volume])
+    return {"volume": current_volume}
 
 @app.get("/stop")
 def stop():

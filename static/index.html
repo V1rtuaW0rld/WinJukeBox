@@ -27,7 +27,15 @@
         </div>
       
         <div class="header-left">
-            <input type="text" id="searchInput" placeholder="Rechercher..." oninput="doSearch()">
+            <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Rechercher titre..." oninput="doSearch()">
+            
+                <div class="search-icons-group">
+                    <img src="/static/icons/title.png" class="search-icon-btn" onclick="setSearchMode('title')" title="Rechercher par titre">
+                    <img src="/static/icons/artist.png" class="search-icon-btn" onclick="setSearchMode('artist')" title="Rechercher par artiste">
+                    <img src="/static/icons/album.png" class="search-icon-btn" onclick="setSearchMode('album')" title="Rechercher par album">
+                </div>
+            </div>
         </div>
 
         <div class="header-controls">

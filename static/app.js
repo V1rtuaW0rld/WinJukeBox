@@ -1,63 +1,77 @@
 /**
  * ---------------------------------------------------------
- *  RECHERCHE ET AFFICHAGE DES MORCEAUX
+ * RECHERCHE ET AFFICHAGE DES MORCEAUX
  * ---------------------------------------------------------
- * Utilise l'endpoint /search de server.py
  */
+let currentSearchMode = 'title'; 
+
+function setSearchMode(mode) {
+    currentSearchMode = mode;
+    const input = document.getElementById("searchInput");
+    
+    // Optimisation : Utilisation d'un dictionnaire pour le texte
+    const labels = { 'artist': 'artiste', 'album': 'album', 'title': 'titre' };
+    input.placeholder = `Rechercher ${labels[mode] || 'titre'}...`;
+
+    // Gestion visuelle des icônes
+    document.querySelectorAll('.search-icon-btn').forEach(img => {
+        img.classList.toggle('active', img.src.includes(mode));
+    });
+
+    doSearch();
+}
+
 async function doSearch() {
     try {
         const query = document.getElementById("searchInput").value || "";
-        const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+        // On envoie le mode au serveur
+        const url = `/search?q=${encodeURIComponent(query)}&mode=${currentSearchMode}`;
+        const response = await fetch(url);
+        
         if (!response.ok) throw new Error("Erreur serveur");
-
         const data = await response.json();
         const list = document.getElementById("songList");
 
+        list.innerHTML = "";
+
         if (!data.songs || data.songs.length === 0) {
-            list.innerHTML = `<div style="text-align:center; padding:20px;">
-                Aucune musique trouvée 🎸
-            </div>`;
+            list.innerHTML = `<div style="text-align:center; padding:20px;">Aucune musique trouvée 🎸</div>`;
             return;
         }
 
-        list.innerHTML = "";
         data.songs.forEach(song => {
             const card = document.createElement("div");
             card.className = "song-card";
-
-            // --- PRÉPARATION DU TEXTE DE L'ALBUM ---
-            // Si song.album existe, on ajoute " > Nom de l'album", sinon rien.
             const albumInfo = song.album ? ` > ${song.album}` : "";
+            
+            // On nettoie les guillemets pour éviter les bugs HTML
+            const cleanTitle = song.title.replace(/"/g, '&quot;');
+            const cleanArtist = song.artist.replace(/"/g, '&quot;');
+            const cleanAlbum = (song.album || "").replace(/"/g, '&quot;');
 
             card.innerHTML = `
                 <div class="song-info">
-                  <div class="song-title">${song.title}</div>
+                    <div class="song-title">${song.title}</div>
                     <div class="song-subtext">
-                    <span class="song-artist">${song.artist}</span>
-                    <span class="song-album">${albumInfo}</span>
+                        <span class="song-artist">${song.artist}</span>
+                        <span class="song-album">${albumInfo}</span>
                     </div>
-                  </div>
-                <div class="song-actions">
-                    <button
-                        class="add-to-playlist-btn"
-                        data-id="${song.id}"
-                        data-title="${song.title.replace(/"/g, '&quot;')}"
-                        data-artist="${song.artist.replace(/"/g, '&quot;')}"
-                        data-album="${(song.album || "").replace(/"/g, '&quot;')}"
-                    >➕</button>
-                    <button class="play-btn" data-id="${song.id}">▶</button>
                 </div>
-            `;
-
+                <div class="song-actions">
+                    <button class="add-to-playlist-btn" 
+                        data-id="${song.id}" 
+                        data-title="${cleanTitle}" 
+                        data-artist="${cleanArtist}" 
+                        data-album="${cleanAlbum}">➕</button>
+                    <button class="play-btn" data-id="${song.id}">▶</button>
+                </div>`;
             list.appendChild(card);
         });
 
     } catch (err) {
         console.error(err);
-        document.getElementById("songList").innerHTML =
-            `<div style="color:red; text-align:center; padding:20px;">
-                Impossible de joindre le Jukebox.
-            </div>`;
+        document.getElementById("songList").innerHTML = 
+            `<div style="color:red; text-align:center; padding:20px;">Impossible de joindre le Jukebox.</div>`;
     }
 }
 
@@ -92,8 +106,15 @@ async function togglePause() {
     await fetch(`/pause`);
 }
 
+// Variable locale pour éviter que le curseur ne saute pendant qu'on le bouge
+let isDraggingVolume = false;
+
 async function changeVolume(level) {
+    // On met à jour le volume sur le serveur
     await fetch(`/volume/${level}`);
+    
+    // Optionnel : on peut stocker aussi dans le navigateur pour un backup
+    localStorage.setItem("lastVolume", level);
 }
 
 async function seek(seconds) {
@@ -311,6 +332,15 @@ async function updateStatus() {
         else {
         btn.classList.add("playing");
         btn.classList.remove("paused");
+        }
+
+        // --- 5. SYNCHRO DU SLIDER VOLUME ---
+        const volSlider = document.getElementById("volumeSlider"); // Vérifie bien cet ID dans ton HTML
+        if (volSlider && !isDraggingVolume) {
+        // Si le serveur nous renvoie le volume dans le status
+        if (data.volume !== undefined) {
+        volSlider.value = data.volume;
+        }
         }
 }
 
@@ -549,13 +579,16 @@ async function toggleShuffle() {
 
 /**
  * ---------------------------------------------------------
- *  INITIALISATION GLOBALE
+ * INITIALISATION GLOBALE
  * ---------------------------------------------------------
  */
 window.addEventListener("load", () => {
     initProgressBar();
     initPlaylistPanel();
-    doSearch();
+    
+    // On remplace doSearch() par setSearchMode pour 
+    // allumer l'icône "titre" et préparer le terrain proprement.
+    setSearchMode('title'); 
 });
 
 /**

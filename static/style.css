@@ -60,14 +60,58 @@ body {
 }
 
 /* === ZONE DE RECHERCHE === */
+.search-container {
+    position: relative;
+    width: 100%; /* On occupe tout l'espace alloué (les 18% du header-left) */
+    display: flex;
+    align-items: center;
+}
+
 .header-left input {
-    width: 100%;
-    padding: 8px 15px;
+    width: 100%; /* La barre va jusqu'au bout à droite */
+    /* C'EST ICI : 115px de padding à droite pour laisser la place aux 3 icônes */
+    padding: 10px 100px 10px 15px; 
     border-radius: 20px;
     border: none;
     background: #242424;
     color: white;
+    outline: none;
 }
+
+.search-icons-group {
+    position: absolute;
+    right: 10px; /* On cale le groupe à 10px du bord droit de la barre */
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 10px; /* Espace entre tes 3 icônes */
+    align-items: center;
+}
+
+.search-icon-btn {
+    width: 22px; /* Taille harmonieuse pour les 3 icônes */
+    height: 22px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.5;
+    object-fit: contain;
+}
+
+/* On supprime complètement l'ancienne règle .search-icon (celle à 75px) 
+   car elle crée un conflit avec le nouveau groupe d'icônes */
+
+.search-icon-btn:hover {
+    transform: scale(1.2);
+    opacity: 1;
+}
+
+/* Classe pour l'icône active (celle sélectionnée) */
+.search-icon-btn.active {
+    opacity: 1;
+    filter: drop-shadow(0 0 5px #1db954); /* Petite lueur verte par exemple */
+}
+
+
 
 /* === ZONE CENTRALE : LECTEUR === */
 .player-controls {
