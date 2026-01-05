@@ -52,33 +52,46 @@ async function doSearch() {
     const albumCoverUrl = `/cover/${song.id}`;
     
     card.innerHTML = `
-        <div class="album-card-content" style="display: flex; flex-direction: column; width: 100%;">
-            <div class="album-header" style="display: flex; align-items: center; padding: 12px;">
-                <span class="expand-icon" 
-                      style="cursor:pointer; margin-right:15px; font-size:1.2em; color:#1db954; flex-shrink: 0;" 
-                      onclick="toggleAlbum('${cleanAlbum}', '${cleanArtist}', this)">▶</span>
-                
-                <div class="cover-slot" style="width: 100px; height: 100px; margin-right: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
-                    </div>
+    <div class="album-card-content" style="display: flex; flex-direction: column; width: 100%;">
+        <div class="album-header" style="display: flex; align-items: center; padding: 12px;">
+            
+            <span class="expand-icon" 
+                  style="cursor:pointer; margin-right:15px; font-size:1.2em; color:#1db954; flex-shrink: 0;" 
+                  onclick="toggleAlbum('${cleanAlbum}', '${cleanArtist}', this)">▶</span>
+            
+            <div class="cover-slot" style="width: 100px; height: 100px; margin-right: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+            </div>
 
-                <div class="album-identity" style="display: flex; flex-direction: column; flex-grow: 1;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                        <span style="font-size: 0.9em;">💿</span>
-                        <div class="song-title" style="color: #1db954; font-weight: bold; font-size: 1.1em;">
-                            ${song.album}
-                        </div>
+            <div class="album-identity" style="display: flex; flex-direction: column; flex-grow: 1;">
+                
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 2px;">
+                    <span style="font-size: 0.9em;">💿</span>
+                    <div class="song-title" style="color: #1db954; font-weight: bold; font-size: 1.1em;">
+                        ${song.album}
                     </div>
-                    <div class="song-subtext" style="color: #b3b3b3; margin-bottom: 10px; font-size: 0.9em;">${song.artist}</div>
                     
-                    <button class="add-album-btn" 
-                            style="width: fit-content; background:#1db954; color:white; border:none; border-radius:20px; padding:5px 15px; font-size:0.75em; font-weight:bold; cursor:pointer; display: flex; align-items: center; text-transform: uppercase;"
-                            onclick="addFullAlbum('${cleanAlbum}', '${cleanArtist}')">
-                        <span style="margin-right:5px; font-size: 1.2em;">+</span> TOUT AJOUTER
+                    <button class="play-album-fast-btn" 
+                            title="Écouter cet album maintenant"
+                            style="background: #1db954; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white;"
+                            onclick="playFullAlbumNow('${cleanAlbum}', '${cleanArtist}')">
+                        <span style="font-size: 0.8em; margin-left: 2px;">▶</span>
                     </button>
                 </div>
+
+                <div class="song-subtext" style="color: #b3b3b3; margin-bottom: 10px; font-size: 0.9em;">
+                    ${song.artist}
+                </div>
+                
+                <button class="add-album-btn" 
+                        style="width: fit-content; background:#1db954; color:white; border:none; border-radius:20px; padding:5px 15px; font-size:0.75em; font-weight:bold; cursor:pointer; display: flex; align-items: center; text-transform: uppercase;"
+                        onclick="addFullAlbum('${cleanAlbum}', '${cleanArtist}')">
+                    <span style="margin-right:5px; font-size: 1.2em;">+</span> TOUT AJOUTER
+                </button>
+                
             </div>
-            <div class="album-details" style="display: none; width: 100%;"></div>
-        </div>`;
+        </div>
+        <div class="album-details" style="display: none; width: 100%;"></div>
+    </div>`;
 
     // On tente de charger l'image
     const imgTest = new Image();
@@ -497,6 +510,34 @@ if (data.track && data.track.id !== currentTrackId) {
 
 // Lancement de la boucle de synchronisation (1 fois par seconde)
 setInterval(updateStatus, 1000);
+
+// Lire un Album individuellement
+// Variable globale pour savoir quelle table on lit
+let currentMode = "playlist"; // ou "album"
+
+async function playFullAlbumNow(albumName, artistName) {
+    try {
+        const response = await fetch('/api/play_album_now', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ album: albumName, artist: artistName })
+        });
+        
+        const data = await response.json();
+        
+        if (data.first_id) {
+            // On lance la lecture. Le serveur gérera le 'next' 
+            // via la priorité playlist_album dans ta route /next
+            play(data.first_id);
+            console.log("Lecture de l'album lancée :", albumName);
+        } else {
+            console.error("Erreur : Aucun ID retourné par le serveur");
+        }
+    } catch (err) {
+        console.error("Erreur lors de la requête album :", err);
+    }
+}
+
 
 /**
  * ---------------------------------------------------------

@@ -40,6 +40,12 @@ def init_db():
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     track_id INTEGER NOT NULL,
                     position INTEGER NOT NULL)''')
+    
+    # Table Playlist Album (Lecture immédiate d'un album)
+    c.execute('''CREATE TABLE IF NOT EXISTS playlist_album (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    track_id INTEGER NOT NULL,
+                    position INTEGER NOT NULL)''')
 
     conn.commit()
     return conn
