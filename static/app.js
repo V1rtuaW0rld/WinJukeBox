@@ -160,9 +160,12 @@ async function toggleAlbum(albumName, artistName, element) {
                 data.tracks.forEach(track => {
     const cleanT = track.title.replace(/"/g, '&quot;').replace(/'/g, "\\'");
     
+    // AJOUT : class="album-track-item" et data-id sur la div parente
     html += `
-        <div class="track-item" style="padding: 10px 30px 10px 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #ccc;">${track.title}</span>
+        <div class="album-track-item" data-id="${track.id}" 
+             style="padding: 10px 30px 10px 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center;">
+            
+            <span class="track-title-text" style="color: #ccc;">${track.title}</span>
             
             <div class="song-actions" style="display: flex; gap: 10px;">
                 <button class="add-to-playlist-btn" 
@@ -171,7 +174,7 @@ async function toggleAlbum(albumName, artistName, element) {
                         data-artist="${artistName.replace(/'/g, "\\'")}" 
                         data-album="${albumName.replace(/'/g, "\\'")}">➕</button>
                 
-                <button class="play-btn" data-id="${track.id}">▶</button>
+                <button class="play-btn" data-id="${track.id}" onclick="play(${track.id})">▶</button>
             </div>
         </div>`;
 });
@@ -455,12 +458,15 @@ if (data.track && data.track.id !== currentTrackId) {
 }
         }
 
-        // --- 2. GESTION DU HIGHLIGHT DANS LA PLAYLIST ---
-        const allItems = document.querySelectorAll(".playlist-item");
-        allItems.forEach(item => {
-            const isCurrent = (data.track && Number(item.dataset.id) === data.track.id);
-            item.classList.toggle("playing-now", isCurrent);
-        });
+        /// --- 2. GESTION DU HIGHLIGHT (PLAYLIST + BODY) ---
+// On sélectionne TOUS les types de lignes de morceaux possibles
+const allItems = document.querySelectorAll(".playlist-item, .song-item, .album-track-item");
+
+allItems.forEach(item => {
+    // On compare l'ID stocké dans 'data-id' avec l'ID renvoyé par le serveur
+    const isCurrent = (data.track && Number(item.dataset.id) === data.track.id);
+    item.classList.toggle("playing-now", isCurrent);
+});
 
         // --- 3. BARRE DE PROGRESSION & TEMPS ---
         const currentTxt = document.getElementById("currentTime");

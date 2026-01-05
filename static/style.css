@@ -388,22 +388,33 @@ body::before {
     margin-right: 10px;
 }
 
-/* 4. Highlight du morceau en cours de lecture */
-/* (J'ai fusionné tes classes .playing et .playing-now pour plus de clarté) */
-.playlist-item.playing-now {
-    background: rgba(29, 185, 84, 0.15) !important; /* Vert Spotify transparent */
-    border-left: 4px solid #1db954;
+/* 4. Highlight du morceau en cours (Playlist + Recherche + Albums) */
+.playlist-item.playing-now, 
+.song-item.playing-now, 
+.album-track-item.playing-now {
+    background: rgba(29, 185, 84, 0.15) !important;
+    border-left: 4px solid #1db954 !important;
 }
 
-.playlist-item.playing-now .playlist-text {
-    color: #1db954;
+/* Couleurs de texte pour le morceau actif */
+.playlist-item.playing-now .playlist-text,
+.song-item.playing-now .song-title,
+.album-track-item.playing-now .track-title-text {
+    color: #1db954 !important;
     font-weight: bold;
 }
 
-/* 5. Le slot de la mini-cover (pour le highlight bordure) */
-.playlist-item.playing-now .cover-slot {
+/* 5. Le slot de la mini-cover et icônes pour le highlight */
+.playlist-item.playing-now .cover-slot,
+.album-track-item.playing-now .track-number {
     border: 1px solid #1db954;
     box-sizing: border-box;
+    color: #1db954;
+}
+
+.album-track-item.playing-now .track-title-text {
+    color: #1db954 !important;
+    font-weight: bold;
 }
 
 /* 6. Bouton supprimer (Corbeille) */
