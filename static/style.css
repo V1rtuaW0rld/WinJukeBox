@@ -354,6 +354,72 @@ body::before {
 }
 
 /* === ITEM du volet PLAYLIST === */
+/**
+ * SECTION : PLAYLIST (PANNEAU LATÉRAL)
+ * Regroupement propre pour éviter les conflits
+ */
+
+/* 1. La ligne de la playlist (Le conteneur) */
+.playlist-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* 2. Effet au survol */
+.playlist-item:hover {
+    background: rgba(255,255,255,0.08);
+}
+
+/* 3. Style du texte (Titre - Artiste) */
+.playlist-text {
+    flex-grow: 1;
+    cursor: pointer;
+    color: #eee;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 10px;
+}
+
+/* 4. Highlight du morceau en cours de lecture */
+/* (J'ai fusionné tes classes .playing et .playing-now pour plus de clarté) */
+.playlist-item.playing-now {
+    background: rgba(29, 185, 84, 0.15) !important; /* Vert Spotify transparent */
+    border-left: 4px solid #1db954;
+}
+
+.playlist-item.playing-now .playlist-text {
+    color: #1db954;
+    font-weight: bold;
+}
+
+/* 5. Le slot de la mini-cover (pour le highlight bordure) */
+.playlist-item.playing-now .cover-slot {
+    border: 1px solid #1db954;
+    box-sizing: border-box;
+}
+
+/* 6. Bouton supprimer (Corbeille) */
+.remove-btn {
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 1.1em;
+    padding: 5px;
+    transition: color 0.2s;
+}
+
+.remove-btn:hover {
+    color: #ff4444;
+}
 #playlistItems {
     list-style: none;
     padding: 0;
@@ -406,13 +472,7 @@ body::before {
     padding: 0;
 }
 
-.playlist-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 4px 8px;
-}
+
 
 .playlist-text {
     flex: 1;
@@ -523,17 +583,7 @@ body::before {
     letter-spacing: 1px;
 }
 
-/* Highlight du morceau en cours dans la playlist */
-.playlist-item.playing-now {
-    background: #1db95422 !important; /* Fond vert très léger */
-    border-left: 4px solid #1db954;
-    transition: all 0.3s ease;
-}
 
-.playlist-item.playing-now .playlist-text {
-    color: #1db954;
-    font-weight: bold;
-}
 
 /* Selectionner le device */
 /* 1. LE CONTENEUR (Le fond noir) */
@@ -789,24 +839,7 @@ body::before {
         width: 100% !important;
     }
 
-    .playlist-item {
-        width: 100% !important;
-        box-sizing: border-box !important;
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        padding: 10px 5px !important;
-        border-bottom: 1px solid #222;
-    }
 
-    /* Empêche le texte long de pousser la poubelle hors écran */
-    .playlist-item span {
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        flex-grow: 1 !important;
-        margin-right: 10px !important;
-    }
 
     .delete-song-btn {
         flex-shrink: 0 !important; /* La poubelle ne rétrécit jamais */

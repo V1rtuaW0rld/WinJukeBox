@@ -49,28 +49,54 @@ async function doSearch() {
     const cleanAlbum = (song.album || "").replace(/"/g, '&quot;').replace(/'/g, "\\'");
 
     if (isGroupMode) {
-        card.innerHTML = `
-            <div class="album-card-content" style="display: flex; flex-direction: column; width: 100%;">
-                <div class="album-header" style="display: flex; align-items: flex-start; padding: 10px;">
-                    <span class="expand-icon" 
-                          style="cursor:pointer; margin-right:15px; font-size:1.2em; color:#1db954; padding-top: 5px;" 
-                          onclick="toggleAlbum('${cleanAlbum}', '${cleanArtist}', this)">▶</span>
-                    
-                    <div class="album-identity" style="display: flex; flex-direction: column; flex-grow: 1;">
-                        <div class="song-title" style="color: #1db954; font-weight: bold; font-size: 1.1em; margin-bottom: 4px;">💿 ${song.album}</div>
-                        <div class="song-subtext" style="margin-bottom: 10px;">${song.artist}</div>
-                        
-                        <button class="add-album-btn" 
-                                style="width: fit-content; background:#1db954; color:white; border:none; border-radius:12px; padding:4px 12px; font-size:0.8em; cursor:pointer; display: flex; align-items: center;"
-                                onclick="addFullAlbum('${cleanAlbum}', '${cleanArtist}')">
-                            <span style="margin-right:5px;">➕</span> TOUT AJOUTER
-                        </button>
-                    </div>
-                </div>
+    const albumCoverUrl = `/cover/${song.id}`;
+    
+    card.innerHTML = `
+        <div class="album-card-content" style="display: flex; flex-direction: column; width: 100%;">
+            <div class="album-header" style="display: flex; align-items: center; padding: 12px;">
+                <span class="expand-icon" 
+                      style="cursor:pointer; margin-right:15px; font-size:1.2em; color:#1db954; flex-shrink: 0;" 
+                      onclick="toggleAlbum('${cleanAlbum}', '${cleanArtist}', this)">▶</span>
                 
-                <div class="album-details" style="display: none; width: 100%; margin-top: 5px; padding-left: 45px; border-left: 2px solid #1db954; background: rgba(255,255,255,0.03);">
+                <div class="cover-slot" style="width: 100px; height: 100px; margin-right: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                    </div>
+
+                <div class="album-identity" style="display: flex; flex-direction: column; flex-grow: 1;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                        <span style="font-size: 0.9em;">💿</span>
+                        <div class="song-title" style="color: #1db954; font-weight: bold; font-size: 1.1em;">
+                            ${song.album}
+                        </div>
+                    </div>
+                    <div class="song-subtext" style="color: #b3b3b3; margin-bottom: 10px; font-size: 0.9em;">${song.artist}</div>
+                    
+                    <button class="add-album-btn" 
+                            style="width: fit-content; background:#1db954; color:white; border:none; border-radius:20px; padding:5px 15px; font-size:0.75em; font-weight:bold; cursor:pointer; display: flex; align-items: center; text-transform: uppercase;"
+                            onclick="addFullAlbum('${cleanAlbum}', '${cleanArtist}')">
+                        <span style="margin-right:5px; font-size: 1.2em;">+</span> TOUT AJOUTER
+                    </button>
                 </div>
-            </div>`;
+            </div>
+            <div class="album-details" style="display: none; width: 100%;"></div>
+        </div>`;
+
+    // On tente de charger l'image
+    const imgTest = new Image();
+    imgTest.src = albumCoverUrl;
+    
+    imgTest.onload = function() {
+        const slot = card.querySelector('.cover-slot');
+        if (slot) {
+            // On injecte l'image seulement si elle existe
+            slot.innerHTML = `<img src="${albumCoverUrl}" 
+                                   style="width: 100%; height: 100%; border-radius: 4px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">`;
+        }
+    };
+
+    // Si erreur (404), on ne fait rien : le cover-slot reste une zone de 70px vide et invisible.
+
+
+   
     } else {
         const albumInfo = song.album ? ` > ${song.album}` : "";
         card.innerHTML = `
@@ -147,20 +173,30 @@ async function toggleAlbum(albumName, artistName, element) {
     element.innerText = '▼';
 }
 async function addFullAlbum(albumName, artistName) {
-    // 1. On demande au Python la liste des morceaux (il sait déjà le faire)
-    const response = await fetch(`/album_tracks?album=${encodeURIComponent(albumName)}&artist=${encodeURIComponent(artistName)}`);
-    const data = await response.json();
+    console.log(`Préparation de l'ajout global : ${albumName}`);
     
-    if (data.tracks && data.tracks.length > 0) {
-        // 2. Pour chaque morceau reçu, on appelle la route d'ajout individuelle
-        for (const track of data.tracks) {
-            // On attend chaque ajout pour ne pas saturer le serveur Python
-            await fetch(`/playlist/add/${track.id}`, { method: "POST" });
-        }
+    try {
+        // 1. On utilise ta route existante pour lister les titres
+        const response = await fetch(`/album_tracks?album=${encodeURIComponent(albumName)}&artist=${encodeURIComponent(artistName)}`);
+        const data = await response.json();
         
-        // 3. Une fois fini, on rafraîchit la vue de la playlist
-        loadPlaylistFromServer();
-        alert(`L'album "${albumName}" a été ajouté à la playlist.`);
+        if (data.tracks && data.tracks.length > 0) {
+            // 2. On boucle sur chaque piste reçue
+            for (const track of data.tracks) {
+                // On utilise ta route existante pour ajouter UN titre
+                // Le "await" ici est crucial : il attend que le Python ait fini l'insertion 
+                // avant de demander la suivante, évitant de bloquer ta base de données.
+                await fetch(`/playlist/add/${track.id}`, { method: "POST" });
+            }
+            
+            // 3. Une fois la boucle terminée, on rafraîchit la playlist à droite
+            loadPlaylistFromServer();
+            
+            // 4. On affiche l'alerte
+            alert(`L'album "${albumName}" a été ajouté à la playlist.`);
+        }
+    } catch (err) {
+        console.error("Erreur lors de l'ajout groupé :", err);
     }
 }
 /**
@@ -367,21 +403,43 @@ async function updateStatus() {
             }
 
             // MISE À JOUR DE L'AMBIANCE VISUELLE (Image)
-            // On ne change l'image que si l'ID a vraiment changé pour éviter le clignotement
-            if (data.track.id !== currentTrackId) {
-                const elHeader = document.querySelector(".jukebox-header");
-                const elCover = document.getElementById("current-cover");
-                const nextSrc = `/cover/${data.track.id}`;
-                const timestamp = new Date().getTime();
-                const fullImageUrl = `url("${nextSrc}?t=${timestamp}")`;
+if (data.track && data.track.id !== currentTrackId) {
+    const elHeader = document.querySelector(".jukebox-header");
+    const elCover = document.getElementById("current-cover");
+    const nextSrc = `/cover/${data.track.id}?t=${new Date().getTime()}`;
 
-                document.body.style.backgroundImage = fullImageUrl;
-                if (elHeader) elHeader.style.backgroundImage = fullImageUrl;
-                if (elCover) elCover.src = `${nextSrc}?t=${timestamp}`;
+    // On crée un testeur d'image "fantôme"
+    const imgTester = new Image();
+    imgTester.src = nextSrc;
 
-                // On met à jour l'ID global une fois que tout est fait
-                currentTrackId = data.track.id;
-            }
+    // CAS 1 : L'image existe et charge avec succès
+    imgTester.onload = () => {
+        const urlFormat = `url("${nextSrc}")`;
+        document.body.style.backgroundImage = urlFormat;
+        if (elHeader) elHeader.style.backgroundImage = urlFormat;
+        if (elCover) {
+            elCover.style.display = "block";
+            elCover.src = nextSrc;
+        }
+    };
+
+    // CAS 2 : L'image est absente (Erreur 404 ou 500)
+    imgTester.onerror = () => {
+        console.log("Pochette absente pour ce titre, passage en mode neutre.");
+        // Au lieu d'une image, on met un dégradé stylé pour le fond
+        const neutralBg = "linear-gradient(135deg, #121212 0%, #282828 100%)";
+        
+        document.body.style.backgroundImage = neutralBg;
+        if (elHeader) elHeader.style.backgroundImage = neutralBg;
+        
+        if (elCover) {
+            // On cache la balise image cassée pour ne pas voir l'icône "image brisée"
+            elCover.style.display = "none"; 
+        }
+    };
+
+    currentTrackId = data.track.id;
+}
         }
 
         // --- 2. GESTION DU HIGHLIGHT DANS LA PLAYLIST ---
@@ -491,15 +549,42 @@ function refreshPlaylistUI() {
     playlist.forEach((song, index) => {
         const li = document.createElement("li");
         li.classList.add("playlist-item");
-        
-        // --- ÉTAPE CRUCIALE POUR LE HIGHLIGHT ---
-        // On attache l'ID de la BDD directement à l'élément HTML
         li.dataset.id = song.id; 
 
-        // Zone texte cliquable
+        // 1. Création du Slot pour la mini-cover (fixe à 32px)
+        const coverSlot = document.createElement("div");
+        coverSlot.style.width = "32px";
+        coverSlot.style.height = "32px";
+        coverSlot.style.marginRight = "12px";
+        coverSlot.style.flexShrink = "0";
+        coverSlot.style.borderRadius = "3px";
+        coverSlot.style.overflow = "hidden";
+        coverSlot.style.backgroundColor = "rgba(255,255,255,0.05)"; // Optionnel : léger fond gris
+        coverSlot.style.display = "flex";
+        coverSlot.style.alignItems = "center";
+        coverSlot.style.justifyContent = "center";
+
+        // 2. Test de l'image pour la mini-cover
+        const miniImg = new Image();
+        miniImg.src = `/cover/${song.id}`;
+        miniImg.style.width = "100%";
+        miniImg.style.height = "100%";
+        miniImg.style.objectFit = "cover";
+
+        miniImg.onload = () => {
+            coverSlot.appendChild(miniImg);
+        };
+        // Si erreur (404), on ne fait rien : le slot reste vide (zone de vide propre)
+
+        // 3. Zone texte cliquable
         const textSpan = document.createElement("span");
         textSpan.textContent = `${song.title} — ${song.artist}`;
         textSpan.classList.add("playlist-text");
+        textSpan.style.flexGrow = "1"; // Pour que le texte occupe l'espace
+        textSpan.style.fontSize = "0.85em";
+        textSpan.style.whiteSpace = "nowrap";
+        textSpan.style.overflow = "hidden";
+        textSpan.style.textOverflow = "ellipsis";
         
         textSpan.addEventListener("click", () => {
             const foundIndex = playlist.findIndex(s => s.id === song.id);
@@ -510,16 +595,17 @@ function refreshPlaylistUI() {
             }
         });
 
-        // Bouton corbeille (pour supprimer de la playlist)
+        // 4. Bouton corbeille
         const trashBtn = document.createElement("button");
         trashBtn.textContent = "🗑";
         trashBtn.classList.add("remove-btn");
         trashBtn.addEventListener("click", (e) => {
-            e.stopPropagation(); // Empêche de lancer la musique quand on veut juste supprimer
+            e.stopPropagation();
             removeFromPlaylist(song.id);
         });
 
-        // Assemblage de la ligne
+        // Assemblage (Vignette + Texte + Poubelle)
+        li.appendChild(coverSlot);
         li.appendChild(textSpan);
         li.appendChild(trashBtn);
         ul.appendChild(li);
