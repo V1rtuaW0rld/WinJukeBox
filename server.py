@@ -1,3 +1,5 @@
+#lancer le fichier actuel avec cette commande ci-dessous pour avoir un reload auto à chaque ctrl+s
+# uvicorn server:app --reload --host 0.0.0.0 --port 8000
 import subprocess
 import os
 import sqlite3
@@ -11,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi import Request
 
 # --- AJOUT: GESTION MISE EN VEILLE ---
 # Constantes Windows
@@ -409,6 +412,123 @@ def clear_playlist():
     conn.commit()
     conn.close()
     return {"status": "cleared"}
+
+
+
+# --- GESTION DES PLAYLISTS SAUVEGARDÉES ---
+
+@app.post('/api/playlists/save')
+async def save_playlist(request: Request): # On ajoute 'request' ici
+    data = await request.json() # Avec FastAPI, on utilise 'await request.json()'
+    name = data.get('name')
+    
+    if not name:
+        return {"error": "Nom manquant"}
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        # 1. Vérifier si la playlist existe
+        c.execute("SELECT id FROM saved_playlists_info WHERE name = ?", (name,))
+        row = c.fetchone()
+
+        if row:
+            playlist_id = row[0]
+            # Supprimer l'ancien contenu pour cette playlist (Enrichissement)
+            c.execute("DELETE FROM saved_playlists_content WHERE playlist_id = ?", (playlist_id,))
+        else:
+            # Créer une nouvelle entrée
+            c.execute("INSERT INTO saved_playlists_info (name) VALUES (?)", (name,))
+            playlist_id = c.lastrowid
+
+        # 2. Récupérer les morceaux de la file d'attente actuelle (table 'playlist')
+        c.execute("SELECT track_id, position FROM playlist ORDER BY position")
+        current_tracks = c.fetchall()
+
+        # 3. Sauvegarder les morceaux
+        for track in current_tracks:
+            c.execute("""
+                INSERT INTO saved_playlists_content (playlist_id, track_id, position)
+                VALUES (?, ?, ?)
+            """, (playlist_id, track[0], track[1]))
+
+        conn.commit()
+        return {"status": "success", "message": "Playlist enregistrée"}
+
+    except Exception as e:
+        print(f"Erreur SQL: {e}")
+        return {"error": str(e)}
+    finally:
+        conn.close()
+
+@app.get("/api/playlists")
+def list_saved_playlists():
+    """Renvoie la liste de toutes les playlists enregistrées."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    # On récupère le nom, la date, et on compte le nombre de morceaux au passage !
+    c.execute("""
+        SELECT info.id, info.name, info.created_at, COUNT(content.id)
+        FROM saved_playlists_info info
+        LEFT JOIN saved_playlists_content content ON info.id = content.playlist_id
+        GROUP BY info.id
+        ORDER BY info.created_at DESC
+    """)
+    rows = cur = c.fetchall()
+    conn.close()
+    return {
+        "playlists": [
+            {"id": r[0], "name": r[1], "date": r[2], "count": r[3]} 
+            for r in rows
+        ]
+    }
+
+@app.post("/api/playlists/load")
+async def load_saved_playlist(data: dict):
+    """Remplace la playlist actuelle par une sauvegarde."""
+    playlist_id = data.get("id")
+    if not playlist_id:
+        return {"error": "ID de playlist manquant"}
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        # 1. On vide la playlist de droite actuelle
+        c.execute("DELETE FROM playlist")
+        c.execute("DELETE FROM shuffled_playlist") # On vide aussi le mode aléatoire au cas où
+
+        # 2. On injecte les morceaux de la sauvegarde
+        c.execute("""
+            INSERT INTO playlist (track_id, position)
+            SELECT track_id, position 
+            FROM saved_playlists_content 
+            WHERE playlist_id = ?
+            ORDER BY position ASC
+        """, (playlist_id,))
+
+        conn.commit()
+        return {"status": "success"}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        conn.close()
+
+@app.delete("/api/playlists/{playlist_id}")
+def delete_saved_playlist(playlist_id: int):
+    """Supprime définitivement une playlist du catalogue."""
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        c = conn.cursor()
+        c.execute("DELETE FROM saved_playlists_info WHERE id = ?", (playlist_id,))
+        conn.commit()
+        return {"status": "deleted"}
+    finally:
+        conn.close()
+
+
+
+
 
 # --- SHUFFLE ---
 # ACTIVER

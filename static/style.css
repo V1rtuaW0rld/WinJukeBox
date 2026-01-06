@@ -470,12 +470,78 @@ body::before {
     align-items: center;
 }
 
+/* Le conteneur */
 .header-playlist {
-    flex: 0 0 60px;
+    flex: 0 0 130px;
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 12px;
 }
+
+/* Le cadre vert (la pilule) identique pour les deux */
+.header-btn-pill {
+    background-color: #1db954;
+    border: none;
+    border-radius: 20px;
+    width: 55px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background-color 0.2s;
+}
+
+.header-btn-pill:hover {
+    background-color: #1ed760;
+}
+
+/* L'image des livres (playlists.png) : on la veut grande */
+.btn-icon-large {
+    height: 24px; /* Ajuste ici pour que l'image remplisse bien le cadre */
+    width: auto;
+    object-fit: contain;
+}
+
+/* L'image de la note (playlist.png) : on la veut standard */
+.btn-icon-std {
+    height: 18px; /* Plus petite pour laisser de l'espace vert autour */
+    width: auto;
+    object-fit: contain;
+}
+
+
+/* Style pour le bouton icône seule (sans pourtour) */
+.icon-only-btn {
+    background: none !important;
+    border: none !important;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    transition: transform 0.1s;
+
+    /* AJOUT ICI : Descend le bouton de 3 pixels */
+    transform: translateY(4px); 
+}
+
+.icon-only-btn:hover {
+    /* On combine le zoom et le décalage pour ne pas que ça saute au survol */
+    transform: translateY(4px) scale(1.1); 
+}
+
+/* Taille de l'image PNG dans le volet de droite */
+.icon-only-btn img {
+    width: 22px; 
+    height: auto;
+    display: block;
+}
+
+
+
 
 #playlistItems {
     list-style: none;
@@ -693,10 +759,19 @@ body::before {
 
 
 /* === PANNEAU PLAYLIST (SLIDE-IN) === */
-.playlist-header {
-    display: flex;
-    justify-content: space-between;
+/* Espace et alignement pour les trois icônes à côté du nom (PC) */
+.playlist-header .icon-only-btn {
+    margin-left: 8px;
+    display: inline-flex;
     align-items: center;
+    vertical-align: middle;
+}
+
+/* Taille uniforme pour les trois images PNG (PC) */
+.playlist-header .icon-only-btn img {
+    width: 20px;
+    height: auto;
+    display: block;
 }
 
 .close-playlist-btn {
@@ -863,5 +938,74 @@ body::before {
         justify-content: space-around !important;
         padding: 15px 0 !important;
         border-top: 1px solid #333;
+    }
+}
+
+
+
+
+/* FORCE L'AFFICHAGE MOBILE - PRIORITÉ ABSOLUE */
+@media screen and (max-width: 768px) {
+
+    /* On réduit drastiquement le conteneur pour qu'il ne pousse pas le reste */
+    .jukebox-header .header-playlist {
+        width: 120px !important; 
+        flex: 0 0 120px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        margin: 5px auto !important;
+    }
+
+    /* On force la taille des pilules vertes */
+    button.header-btn-pill {
+        width: 48px !important;
+        height: 28px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        padding: 0 !important;
+        border-radius: 15px !important;
+    }
+
+    /* On dompte les images PNG pour qu'elles rentrent dans les pilules */
+    button.header-btn-pill img.btn-icon-large {
+        height: 18px !important;
+        width: auto !important;
+        display: block !important;
+        margin: auto !important;
+    }
+
+    button.header-btn-pill img.btn-icon-std {
+        height: 14px !important;
+        width: auto !important;
+        display: block !important;
+        margin: auto !important;
+    }
+/* Ajustement pour remonter l'icône à côté de Manon sur mobile */
+.playlist-header button.icon-only-btn {
+    transform: translateY(-0px) !important;  /*-2px pour remonter meme avec 0 lol*/
+    display: inline-flex !important;
+    align-items: center !important;
+}
+
+
+    /* Le petit bouton bibliothèque à côté du nom donné à la playlist */
+    .playlist-header button.icon-only-btn img {
+        width: 18px !important;
+        height: auto !important;
+    }
+}
+
+/* Force les 3 icônes (Books, Plus, Save) à la même taille sur mobile */
+    .playlist-header button.icon-only-btn img {
+        width: 18px !important;
+        height: auto !important;
+    }
+
+    /* On remonte le groupe d'icônes pour l'aligner avec "Manon" */
+    .playlist-header button.icon-only-btn {
+        transform: translateY(0px) !important; 
+        margin-left: 10px !important; /* Un peu plus d'espace pour les gros doigts */
     }
 }

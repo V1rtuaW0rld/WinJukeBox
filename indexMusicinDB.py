@@ -16,36 +16,51 @@ logging.basicConfig(
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
+    # Très important : Activer les Foreign Keys au niveau de la connexion
+    conn.execute("PRAGMA foreign_keys = ON")
     c = conn.cursor()
     
-    # Table Tracks
+    # 1. Table Tracks
     c.execute('''CREATE TABLE IF NOT EXISTS tracks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   title TEXT, artist TEXT, album TEXT, path TEXT, cover_path TEXT)''')
     
-    # Ajout colonne cover_path si manquante
     try:
         c.execute("ALTER TABLE tracks ADD COLUMN cover_path TEXT")
     except sqlite3.OperationalError:
         pass
 
-    # Table Playlist
+    # 2. Table Playlist (Lecture en cours)
     c.execute('''CREATE TABLE IF NOT EXISTS playlist (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     track_id INTEGER NOT NULL,
                     position INTEGER NOT NULL)''')
 
-    # Table Shuffled Playlist
+    # 3. Table Shuffled Playlist
     c.execute('''CREATE TABLE IF NOT EXISTS shuffled_playlist (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     track_id INTEGER NOT NULL,
                     position INTEGER NOT NULL)''')
     
-    # Table Playlist Album (Lecture immédiate d'un album)
+    # 4. Table Playlist Album (Lecture immédiate d'un album)
     c.execute('''CREATE TABLE IF NOT EXISTS playlist_album (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     track_id INTEGER NOT NULL,
                     position INTEGER NOT NULL)''')
+    
+    # 5. Table Playlist Info (Noms des playlists sauvegardées)
+    c.execute('''CREATE TABLE IF NOT EXISTS saved_playlists_info (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    # 6. Table Playlist Content (Morceaux des playlists sauvegardées)
+    c.execute('''CREATE TABLE IF NOT EXISTS saved_playlists_content (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    playlist_id INTEGER NOT NULL,
+                    track_id INTEGER NOT NULL,
+                    position INTEGER NOT NULL,
+                    FOREIGN KEY(playlist_id) REFERENCES saved_playlists_info(id) ON DELETE CASCADE)''')
 
     conn.commit()
     return conn

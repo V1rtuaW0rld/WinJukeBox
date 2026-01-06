@@ -28,8 +28,7 @@
       
         <div class="header-left">
             <div class="search-container">
-            <input type="text" id="searchInput" placeholder="Rechercher titre..." oninput="doSearch()">
-            
+                <input type="text" id="searchInput" placeholder="Rechercher titre..." oninput="doSearch()">
                 <div class="search-icons-group">
                     <img src="/static/icons/title.png" class="search-icon-btn" onclick="setSearchMode('title')" title="Rechercher par titre">
                     <img src="/static/icons/artist.png" class="search-icon-btn" onclick="setSearchMode('artist')" title="Rechercher par artiste">
@@ -47,10 +46,15 @@
                 <button onclick="playNext()" id="nextBtn" title="Suivant"></button>
             </div>
         </div>
-
         <div class="header-playlist">
-            <button id="openPlaylistBtn" class="playlist-btn">🎵</button>
-        </div>
+    <button id="showLibraryHeaderBtn" class="header-btn-pill" onclick="showLibrary()" title="Mes Bibliothèques">
+        <img src="/static/icons/playlists.png" alt="Bibliothèques" class="btn-icon-large">
+    </button>
+    
+    <button id="openPlaylistBtn" class="header-btn-pill" onclick="togglePlaylist()" title="Voir la liste actuelle">
+        <img src="/static/icons/playlist.png" alt="Playlist" class="btn-icon-std">
+    </button>
+</div>
 
         <div class="header-progress">
             <div class="progress-zone">
@@ -65,7 +69,10 @@
             <input type="range" id="volumeSlider" min="0" max="100" value="70" oninput="changeVolume(this.value)">
         </div>
 
-    </header> </div> <div id="deviceModal" class="modal">
+    </header> 
+</div> 
+
+<div id="deviceModal" class="modal">
     <div class="modal-content">
         <h3>Choisir la sortie audio</h3>
         <div id="deviceList"></div>
@@ -73,27 +80,34 @@
     </div>
 </div>
 
-<script src="/static/app.js"></script>
-</html>
-
 
 <!-- Panneau latéral de playlist -->
 <div id="playlistPanel" class="playlist-panel">
-    <div class="playlist-header">
-        <h2>Playlist</h2>
-        <button id="closePlaylistBtn" class="close-playlist-btn">❌</button>
+    <div class="playlist-header" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 15px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 id="current-playlist-name" style="margin: 0; font-size: 1.2rem;">Playlist</h2>
+            <button id="showLibraryBtn" onclick="showLibrary()" title="Mes Playlists" class="icon-only-btn">
+            <img src="/static/icons/playlists.png" alt="Mes Playlists">
+            </button>
+            <button id="newPlaylistBtn" onclick="createNewPlaylist()" title="Nouvelle Playlist" class="icon-only-btn">
+            <img src="/static/icons/createplaylist.png" alt="Créer Playlist">
+            </button>
+            <button id="savePlaylistBtn" onclick="promptSavePlaylist()" title="Sauvegarder cette liste" class="icon-only-btn">
+            <img src="/static/icons/save.png" alt="Sauvegarder">
+            </button>
+        </div>
+        <button id="closePlaylistBtn" class="close-playlist-btn" onclick="togglePlaylist()">❌</button>
     </div>
-	
+    
     <div class="playlist-scroll-zone">
-    <ul id="playlistItems">...</ul>
+        <ul id="playlistItems"></ul>
     </div>
-
+    
     <div class="playlist-actions">
-    <button id="playPlaylistBtn" title="Lire la playlist">▶️</button>
-    <button id="shufflePlaylistBtn" title="Lecture aléatoire">🔀</button>
-    <button id="clearPlaylistBtn" title="Vider la playlist">🗑️</button>
+        <button id="playPlaylistBtn" title="Lire la playlist">▶️</button>
+        <button id="shufflePlaylistBtn" title="Lecture aléatoire">🔀</button>
+        <button id="clearPlaylistBtn" title="Vider la playlist">🗑️</button>
     </div>
-
 </div>
 
 <main id="songList">

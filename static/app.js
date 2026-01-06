@@ -797,7 +797,201 @@ async function toggleShuffle() {
     }
 }
 
+// --- GESTION DES PLAYLISTS SAUVEGARDÉES ---
 
+// Initialisation au chargement de la page
+window.addEventListener('DOMContentLoaded', () => {
+    const savedName = localStorage.getItem('currentPlaylistName') || "Playlist";
+    const nameElement = document.getElementById('current-playlist-name');
+    if (nameElement) nameElement.innerText = savedName;
+
+    // Liaison du bouton +
+    const btnPlus = document.getElementById('newPlaylistBtn');
+    if (btnPlus) btnPlus.addEventListener('click', createNewPlaylist);
+});
+
+// 1. CRÉER UNE NOUVELLE PLAYLIST (Bouton +) - VERSION DIRECTE
+async function createNewPlaylist() {
+    // On passe directement à la question du nom (plus de confirm "Voulez-vous...")
+    const name = prompt("Nom de votre nouvelle playlist :", "Ma Playlist");
+    
+    // Si l'utilisateur clique sur "Annuler" ou ne met rien, on arrête proprement
+    if (!name || name.trim() === "") return;
+
+    try {
+        // A. On vide la playlist temporaire sur le serveur pour partir de zéro
+        await fetch("/playlist/clear", { method: "DELETE" });
+
+        // B. On met à jour l'interface avec le nouveau nom
+        document.getElementById('current-playlist-name').innerText = name;
+        localStorage.setItem('currentPlaylistName', name);
+        
+        // C. On rafraîchit le volet de droite (il sera vide, prêt à être rempli)
+        if (typeof loadPlaylistFromServer === 'function') {
+            await loadPlaylistFromServer();
+        }
+
+        // Notification visuelle dans le panneau central
+        const mainContainer = document.getElementById('songList');
+        mainContainer.innerHTML = `
+            <div style="padding: 40px; text-align: center;">
+                <h2 style="color: #1db954;">✨ Mode création : "${name}"</h2>
+                <p style="color: #888;">Ajoutez vos morceaux, puis cliquez sur la disquette pour sauvegarder.</p>
+            </div>`;
+
+    } catch (err) {
+        console.error("Erreur lors de la création :", err);
+    }
+}
+
+// 2. SAUVEGARDER (Bouton Disquette) - Action Silencieuse & Enrichissement
+async function promptSavePlaylist() {
+    const nameElement = document.getElementById('current-playlist-name');
+    const currentName = nameElement.innerText;
+
+    // Protection : on ne fait rien si le message de succès est déjà affiché
+    if (currentName.includes("✓") || currentName.includes("⚠️")) return;
+
+    let name = currentName;
+    
+    // Si le nom est générique ou vide, on demande une fois via prompt
+    if (name === "Playlist" || name === "") {
+        name = prompt("Sous quel nom enregistrer cette playlist ?");
+        if (!name || name.trim() === "") return;
+        nameElement.innerText = name; // On met à jour l'affichage
+    }
+
+    try {
+        const response = await fetch('/api/playlists/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name: name })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            // --- SUCCÈS : FLASH VERT ---
+            const originalColor = nameElement.style.color;
+            nameElement.style.color = "#1db954"; 
+            nameElement.innerText = "✓ Enregistré !";
+            
+            setTimeout(() => {
+                nameElement.style.color = originalColor;
+                nameElement.innerText = name;
+            }, 2000);
+
+            // Mise à jour de la liste des bibliothèques si elle est visible
+            if (document.getElementById('songList').innerHTML.includes('Mes Bibliothèques')) {
+                showLibrary();
+            }
+        } else {
+            // --- ERREUR : FLASH ROUGE ---
+            const originalColor = nameElement.style.color;
+            nameElement.style.color = "#ff4444";
+            nameElement.innerText = "⚠️ " + (result.error || "Erreur");
+            
+            setTimeout(() => {
+                nameElement.style.color = originalColor;
+                nameElement.innerText = name;
+            }, 3000);
+        }
+    } catch (err) {
+        console.error("Erreur réseau sauvegarde:", err);
+    }
+}
+
+// 3. AFFICHER LA BIBLIOTHÈQUE (Panneau central)
+async function showLibrary() {
+    try {
+        const response = await fetch('/api/playlists');
+        const data = await response.json();
+        const mainContainer = document.getElementById('songList');
+        
+        let html = `
+    <div style="padding: 20px;">
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+            <div class="header-btn-pill" style="cursor: default;">
+                <img src="/static/icons/playlists.png" alt="Bibliothèques" class="btn-icon-large">
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
+`;
+
+        if (data.playlists && data.playlists.length > 0) {
+            data.playlists.forEach(pl => {
+                html += `
+                    <div class="playlist-card" style="background: #181818; padding: 20px; border-radius: 10px; border: 1px solid #333; text-align: left;">
+                        <h3 style="margin: 0 0 10px 0; color: #1db954;">${pl.name}</h3>
+                        <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">${pl.count} morceaux</p>
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="loadSavedPlaylist(${pl.id}, '${pl.name.replace(/'/g, "\\'")}')" style="background: #1db954; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; color: black; font-weight: bold;">Charger</button>
+                            <button onclick="deleteSavedPlaylist(${pl.id})" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Supprimer</button>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            html += `<p style="color: gray;">Aucune playlist sauvegardée.</p>`;
+        }
+
+        html += `</div></div>`;
+        mainContainer.innerHTML = html;
+    } catch (err) {
+        console.error("Erreur bibliothèque:", err);
+    }
+}
+
+// 4. CHARGER UNE PLAYLIST ARCHIVÉE
+async function loadSavedPlaylist(id, name) {
+    try {
+        const response = await fetch('/api/playlists/load', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: id })
+        });
+        
+        if (response.ok) {
+            // A. Mise à jour du nom et du stockage local
+            document.getElementById('current-playlist-name').innerText = name;
+            localStorage.setItem('currentPlaylistName', name);
+            
+            // B. Chargement effectif des morceaux dans le volet de droite
+            if (typeof loadPlaylistFromServer === 'function') {
+                await loadPlaylistFromServer(); 
+            }
+            
+            // C. Affichage du message temporaire (Screenshot 1 corrigé)
+            const mainContainer = document.getElementById('songList');
+            mainContainer.innerHTML = `
+                <div style="padding: 40px; text-align: center;">
+                    <h2 style="color: #1db954;">✅ "${name}" chargée</h2>
+                    <p style="color: #888;">Retrouvez vos titres chargés dans le volet playlist</p>
+                </div>`;
+
+            // D. AUTO-RETOUR : On attend 2 secondes puis on réaffiche "Mes Bibliothèques"
+            setTimeout(() => {
+                showLibrary();
+            }, 2000);
+
+        } else {
+            alert("Erreur lors du chargement de la playlist.");
+        }
+    } catch (err) {
+        console.error("Erreur chargement:", err);
+    }
+}
+
+// 5. SUPPRIMER UNE PLAYLIST
+async function deleteSavedPlaylist(id) {
+    if (!confirm("Supprimer définitivement cette playlist ?")) return;
+    try {
+        const response = await fetch(`/api/playlists/${id}`, { method: 'DELETE' });
+        if (response.ok) showLibrary(); 
+    } catch (err) {
+        console.error("Erreur suppression:", err);
+    }
+}
 /**
  * ---------------------------------------------------------
  * INITIALISATION GLOBALE
@@ -825,3 +1019,8 @@ window.togglePause = togglePause;
 window.seek = seek;
 window.playNext = playNext;
 window.playPrevious = playPrevious;
+window.promptSavePlaylist = promptSavePlaylist;
+window.showLibrary = showLibrary;
+window.loadSavedPlaylist = loadSavedPlaylist;
+window.deleteSavedPlaylist = deleteSavedPlaylist;
+window.createNewPlaylist = createNewPlaylist;
