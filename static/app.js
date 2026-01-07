@@ -262,17 +262,20 @@ async function seek(seconds) {
 }
 
 async function playNext() {
-    if (!currentTrackId) return;
-    const res = await fetch(`/next?current_id=${currentTrackId}`);
+    // On repasse à un appel simple pour que les logs réapparaissent
+    const res = await fetch(`/next?current_id=${currentTrackId || 0}`);
     const data = await res.json();
-    if (data.id) play(data.id);
+    if (data.id) {
+        play(data.id);
+    }
 }
 
 async function playPrevious() {
-    if (!currentTrackId) return;
-    const res = await fetch(`/previous?current_id=${currentTrackId}`);
+    const res = await fetch(`/previous?current_id=${currentTrackId || 0}`);
     const data = await res.json();
-    if (data.id) play(data.id);
+    if (data.id) {
+        play(data.id);
+    }
 }
 
 /**
@@ -746,8 +749,18 @@ function initPlaylistPanel() {
         if (playBtn) {
             const id = Number(playBtn.dataset.id);
             if (id) {
-                isPlaylistMode = false;
-                play(id);
+        // Est-ce qu'on est dans le panneau latéral ?
+        const isInPanel = !!playBtn.closest("#playlistPanel");
+        
+        if (isInPanel) {
+            isPlaylistMode = true; 
+            // On s'assure que la table album est vide pour ne pas perturber Python
+            fetch("/api/clear_album_table", { method: "POST" }).catch(() => {});
+        } else {
+            isPlaylistMode = false;
+        }
+        
+        play(id);
             }
         }
     });

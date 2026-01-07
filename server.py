@@ -485,7 +485,7 @@ def list_saved_playlists():
 
 @app.post("/api/playlists/load")
 async def load_saved_playlist(data: dict):
-    """Remplace la playlist actuelle par une sauvegarde."""
+    global shuffle_mode  # <--- CRUCIAL pour modifier la variable globale
     playlist_id = data.get("id")
     if not playlist_id:
         return {"error": "ID de playlist manquant"}
@@ -493,11 +493,15 @@ async def load_saved_playlist(data: dict):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
-        # 1. On vide la playlist de droite actuelle
+        # 1. On vide TOUT pour repartir à neuf
         c.execute("DELETE FROM playlist")
-        c.execute("DELETE FROM shuffled_playlist") # On vide aussi le mode aléatoire au cas où
+        c.execute("DELETE FROM shuffled_playlist")
+        c.execute("DELETE FROM playlist_album") # <--- Ajouté : évite les conflits de priorité
+        
+        # 2. On désactive le mode shuffle côté serveur
+        shuffle_mode = False 
 
-        # 2. On injecte les morceaux de la sauvegarde
+        # 3. On injecte les morceaux de la sauvegarde
         c.execute("""
             INSERT INTO playlist (track_id, position)
             SELECT track_id, position 
@@ -525,10 +529,6 @@ def delete_saved_playlist(playlist_id: int):
         return {"status": "deleted"}
     finally:
         conn.close()
-
-
-
-
 
 # --- SHUFFLE ---
 # ACTIVER
@@ -590,43 +590,47 @@ def get_next(current_id: int = Query(0)):
     cur = conn.cursor()
     global shuffle_mode
 
-    # --- ÉTAPE A : PRIORITÉ ALBUM ---
-    # On vérifie si la chanson actuelle appartient à l'album flash
+    # --- A. ALBUM ---
     cur.execute("SELECT position FROM playlist_album WHERE track_id = ?", (current_id,))
     res_album = cur.fetchone()
-
     if res_album:
-        current_pos = res_album[0]
-        # On cherche la suivante dans l'album
-        cur.execute("""
-            SELECT track_id FROM playlist_album 
-            WHERE position > ? ORDER BY position ASC LIMIT 1
-        """, (current_pos,))
-        next_row = cur.fetchone()
-        
-        if next_row:
+        cur.execute("SELECT track_id FROM playlist_album WHERE position > ? ORDER BY position ASC LIMIT 1", (res_album[0],))
+        row = cur.fetchone()
+        if row:
             conn.close()
-            return {"id": next_row[0]}
+            return {"id": row[0]}
         else:
-            # Fin de l'album : on nettoie la table et on s'arrête (ou on bascule)
             cur.execute("DELETE FROM playlist_album")
             conn.commit()
             conn.close()
             return {"id": None}
 
-    # --- ÉTAPE B : LOGIQUE PLAYLIST NORMALE (ton code existant) ---
+    # --- B. PLAYLIST (L'auto-réparation est ici) ---
+    if shuffle_mode:
+        # On vérifie si la table shuffle est vide (cas après un load)
+        cur.execute("SELECT COUNT(*) FROM shuffled_playlist")
+        if cur.fetchone()[0] == 0:
+            # Elle est vide : on la remplit de force avant de continuer
+            cur.execute("SELECT track_id FROM playlist")
+            ids = [r[0] for r in cur.fetchall()]
+            if ids:
+                import random
+                random.shuffle(ids)
+                for i, tid in enumerate(ids):
+                    cur.execute("INSERT INTO shuffled_playlist (track_id, position) VALUES (?, ?)", (tid, i))
+                conn.commit()
+
+    # On choisit la table
     table = "shuffled_playlist" if shuffle_mode else "playlist"
-    
-    if current_id == 0:
-        cur.execute(f"SELECT track_id FROM {table} ORDER BY position ASC LIMIT 1")
-    else:
-        cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
-        res = cur.fetchone()
-        if not res:
-            conn.close()
-            return {"id": None}
-        
+
+    cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
+    res = cur.fetchone()
+
+    if res:
         cur.execute(f"SELECT track_id FROM {table} WHERE position > ? ORDER BY position ASC LIMIT 1", (res[0],))
+    else:
+        # Si morceau non trouvé (changement de playlist), on prend le premier de la table active
+        cur.execute(f"SELECT track_id FROM {table} ORDER BY position ASC LIMIT 1")
     
     row = cur.fetchone()
     conn.close()
@@ -635,23 +639,16 @@ def get_next(current_id: int = Query(0)):
 # --- PREVIOUS ---
 @app.get("/previous")
 def get_previous(current_id: int = Query(0)):
-    """
-    Renvoie la chanson précédente :
-    1. Regarde d'abord dans playlist_album (prioritaire)
-    2. Sinon utilise la logique classique (shuffle ou normale)
-    """
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     global shuffle_mode
 
     # --- 1. TEST PRIORITÉ ALBUM ---
-    # On vérifie si l'ID actuel appartient à l'album en cours
     cur.execute("SELECT position FROM playlist_album WHERE track_id = ?", (current_id,))
     res_album = cur.fetchone()
 
     if res_album:
         current_pos_album = res_album[0]
-        # On cherche le morceau précédent dans l'album
         cur.execute("""
             SELECT track_id FROM playlist_album 
             WHERE position < ? 
@@ -662,16 +659,15 @@ def get_previous(current_id: int = Query(0)):
         if prev_album_row:
             conn.close()
             return {"id": prev_album_row[0]}
-        # Si c'est le premier morceau de l'album, on ne renvoie rien (on reste sur place)
-        # ou on laisse couler vers la playlist selon ton choix. Ici on s'arrête.
+        
+        # Début de l'album : on reste sur le premier titre (ou None pour arrêter)
         conn.close()
         return {"id": None}
 
-
-    # --- 2. TA LOGIQUE CLASSIQUE (Inchangée) ---
+    # --- 2. LOGIQUE PLAYLIST ---
     table = "shuffled_playlist" if shuffle_mode else "playlist"
 
-    # Si aucune chanson en cours → renvoyer la dernière
+    # Si aucune chanson en cours ou ID non trouvé dans la table actuelle
     if current_id == 0:
         cur.execute(f"SELECT track_id FROM {table} ORDER BY position DESC LIMIT 1")
         row = cur.fetchone()
@@ -682,9 +678,13 @@ def get_previous(current_id: int = Query(0)):
     cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
     res = cur.fetchone()
 
+    # --- AJOUT SÉCURITÉ : Si on a changé de playlist et que l'ID n'existe plus ici ---
     if not res:
+        # On renvoie le dernier morceau de la NOUVELLE playlist au lieu de bloquer
+        cur.execute(f"SELECT track_id FROM {table} ORDER BY position DESC LIMIT 1")
+        row = cur.fetchone()
         conn.close()
-        return {"id": None}
+        return {"id": row[0] if row else None}
 
     current_pos = res[0]
 
@@ -695,12 +695,20 @@ def get_previous(current_id: int = Query(0)):
         ORDER BY position DESC
         LIMIT 1
     """, (current_pos,))
+    
     prev_row = cur.fetchone()
     conn.close()
 
     return {"id": prev_row[0] if prev_row else None}
 
-
+@app.post("/api/clear_album_table")
+def clear_album_table():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM playlist_album")
+    conn.commit()
+    conn.close()
+    return {"status": "cleared"}
 
 #récupérer les covers
 @app.get("/cover/{track_id}")
