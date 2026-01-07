@@ -316,7 +316,8 @@ def get_status():
         "pos": pos, 
         "duration": duration, 
         "paused": paused, 
-        "track": track_info 
+        "track": track_info,
+        "volume": current_volume
     }
 # --- LIRE un ALBUM en entier ---
 # Version FastAPI (à utiliser si tu as "from fastapi import ...")

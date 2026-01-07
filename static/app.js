@@ -398,6 +398,29 @@ function initProgressBar() {
 
 /**
  * ---------------------------------------------------------
+ * GESTION DU VOLUME (SYNC & DRAG)
+ * ---------------------------------------------------------
+ */
+function initVolumeControl() {
+    const volSlider = document.getElementById("volumeSlider");
+    if (!volSlider) return;
+
+    // Bloque la synchro auto pendant qu'on manipule le curseur
+    volSlider.addEventListener("mousedown", () => { isDraggingVolume = true; });
+    volSlider.addEventListener("touchstart", () => { isDraggingVolume = true; });
+
+    // Relance la synchro auto quand on relâche
+    volSlider.addEventListener("mouseup", () => { isDraggingVolume = false; });
+    volSlider.addEventListener("touchend", () => { isDraggingVolume = false; });
+
+    // Envoie la valeur au serveur en temps réel pendant le glissement
+    volSlider.addEventListener("input", (e) => {
+        changeVolume(e.target.value);
+    });
+}
+
+/**
+ * ---------------------------------------------------------
  * SYNCHRONISATION AVEC MPV & AFFICHAGE INFOS BDD
  * ---------------------------------------------------------
  */
@@ -1040,6 +1063,7 @@ async function deleteSavedPlaylist(id) {
 window.addEventListener("load", () => {
     initProgressBar();
     initPlaylistPanel();
+    initVolumeControl();
     
     // --- ON AJOUTE ÇA ICI ---
     const savedName = localStorage.getItem('currentPlaylistName') || "Playlist";
