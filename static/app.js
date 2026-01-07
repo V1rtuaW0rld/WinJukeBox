@@ -659,6 +659,17 @@ function refreshPlaylistUI() {
     });
 }
 
+/**
+ * GESTION DE L'OUVERTURE DU PANNEAU (Fonction partagée)
+ */
+function togglePlaylist() {
+    const playlistPanel = document.getElementById("playlistPanel");
+    if (!playlistPanel) return;
+
+    // On bascule les classes (même logique que ton init)
+    playlistPanel.classList.toggle("open");
+    document.body.classList.toggle("playlist-is-open");
+}
 
 /* Initialisation du panneau playlist */
 function initPlaylistPanel() {
@@ -798,18 +809,6 @@ async function toggleShuffle() {
 }
 
 // --- GESTION DES PLAYLISTS SAUVEGARDÉES ---
-
-// Initialisation au chargement de la page
-window.addEventListener('DOMContentLoaded', () => {
-    const savedName = localStorage.getItem('currentPlaylistName') || "Playlist";
-    const nameElement = document.getElementById('current-playlist-name');
-    if (nameElement) nameElement.innerText = savedName;
-
-    // Liaison du bouton +
-    const btnPlus = document.getElementById('newPlaylistBtn');
-    if (btnPlus) btnPlus.addEventListener('click', createNewPlaylist);
-});
-
 // 1. CRÉER UNE NOUVELLE PLAYLIST (Bouton +) - VERSION DIRECTE
 async function createNewPlaylist() {
     // On passe directement à la question du nom (plus de confirm "Voulez-vous...")
@@ -876,15 +875,18 @@ async function promptSavePlaylist() {
             nameElement.style.color = "#1db954"; 
             nameElement.innerText = "✓ Enregistré !";
             
+            // 1. On rafraîchit la bibliothèque automatiquement
+            // Cela permet de voir la nouvelle playlist dans la liste sans cliquer
+            // Un délai de 200ms peut parfois aider la base de données à "respirer"
+            setTimeout(() => {
+                showLibrary(); 
+            }, 200);             
+
             setTimeout(() => {
                 nameElement.style.color = originalColor;
                 nameElement.innerText = name;
-            }, 2000);
+            }, 1000);
 
-            // Mise à jour de la liste des bibliothèques si elle est visible
-            if (document.getElementById('songList').innerHTML.includes('Mes Bibliothèques')) {
-                showLibrary();
-            }
         } else {
             // --- ERREUR : FLASH ROUGE ---
             const originalColor = nameElement.style.color;
@@ -952,16 +954,13 @@ async function loadSavedPlaylist(id, name) {
         });
         
         if (response.ok) {
-            // A. Mise à jour du nom et du stockage local
             document.getElementById('current-playlist-name').innerText = name;
             localStorage.setItem('currentPlaylistName', name);
             
-            // B. Chargement effectif des morceaux dans le volet de droite
             if (typeof loadPlaylistFromServer === 'function') {
                 await loadPlaylistFromServer(); 
             }
             
-            // C. Affichage du message temporaire (Screenshot 1 corrigé)
             const mainContainer = document.getElementById('songList');
             mainContainer.innerHTML = `
                 <div style="padding: 40px; text-align: center;">
@@ -969,10 +968,19 @@ async function loadSavedPlaylist(id, name) {
                     <p style="color: #888;">Retrouvez vos titres chargés dans le volet playlist</p>
                 </div>`;
 
-            // D. AUTO-RETOUR : On attend 2 secondes puis on réaffiche "Mes Bibliothèques"
+            // --- AUTO-OUVERTURE ---
             setTimeout(() => {
-                showLibrary();
-            }, 2000);
+                const sidePanel = document.getElementById('playlistPanel');
+                
+                // On vérifie si le panneau est ouvert via la classe "open" (utilisée dans ton CSS)
+                const isOpen = sidePanel && sidePanel.classList.contains('open');
+
+                if (!isOpen) {
+                    togglePlaylist(); 
+                }
+                
+                showLibrary(); 
+            }, 1000);
 
         } else {
             alert("Erreur lors du chargement de la playlist.");
@@ -992,6 +1000,9 @@ async function deleteSavedPlaylist(id) {
         console.error("Erreur suppression:", err);
     }
 }
+
+
+
 /**
  * ---------------------------------------------------------
  * INITIALISATION GLOBALE
@@ -1001,8 +1012,12 @@ window.addEventListener("load", () => {
     initProgressBar();
     initPlaylistPanel();
     
-    // On remplace doSearch() par setSearchMode pour 
-    // allumer l'icône "titre" et préparer le terrain proprement.
+    // --- ON AJOUTE ÇA ICI ---
+    const savedName = localStorage.getItem('currentPlaylistName') || "Playlist";
+    const nameElement = document.getElementById('current-playlist-name');
+    if (nameElement) nameElement.innerText = savedName;
+    // ------------------------
+
     setSearchMode('title'); 
 });
 
@@ -1024,3 +1039,4 @@ window.showLibrary = showLibrary;
 window.loadSavedPlaylist = loadSavedPlaylist;
 window.deleteSavedPlaylist = deleteSavedPlaylist;
 window.createNewPlaylist = createNewPlaylist;
+window.togglePlaylist = togglePlaylist;

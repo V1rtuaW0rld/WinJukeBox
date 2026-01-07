@@ -47,7 +47,7 @@
             </div>
         </div>
         <div class="header-playlist">
-    <button id="showLibraryHeaderBtn" class="header-btn-pill" onclick="showLibrary()" title="Mes Bibliothèques">
+        <button id="showLibraryHeaderBtn" class="header-btn-pill" onclick="showLibrary()" title="Mes Bibliothèques">
         <img src="/static/icons/playlists.png" alt="Bibliothèques" class="btn-icon-large">
     </button>
     
@@ -89,7 +89,7 @@
             <button id="showLibraryBtn" onclick="showLibrary()" title="Mes Playlists" class="icon-only-btn">
             <img src="/static/icons/playlists.png" alt="Mes Playlists">
             </button>
-            <button id="newPlaylistBtn" onclick="createNewPlaylist()" title="Nouvelle Playlist" class="icon-only-btn">
+            <button id="newPlaylistBtn" onclick="createNewPlaylist(event)" title="Nouvelle Playlist" class="icon-only-btn">
             <img src="/static/icons/createplaylist.png" alt="Créer Playlist">
             </button>
             <button id="savePlaylistBtn" onclick="promptSavePlaylist()" title="Sauvegarder cette liste" class="icon-only-btn">
