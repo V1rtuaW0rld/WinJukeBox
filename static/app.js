@@ -663,13 +663,20 @@ function refreshPlaylistUI() {
  * GESTION DE L'OUVERTURE DU PANNEAU (Fonction partagée)
  */
 function togglePlaylist() {
-    const playlistPanel = document.getElementById("playlistPanel");
+    const playlistPanel = document.getElementById('playlistPanel');
     if (!playlistPanel) return;
 
-    // On bascule les classes (même logique que ton init)
-    playlistPanel.classList.toggle("open");
-    document.body.classList.toggle("playlist-is-open");
+    const isOpen = playlistPanel.classList.contains('open');
+
+    if (isOpen) {
+        playlistPanel.classList.remove('open');
+        document.body.classList.remove('playlist-is-open');
+    } else {
+        playlistPanel.classList.add('open');
+        document.body.classList.add('playlist-is-open');
+    }
 }
+
 
 /* Initialisation du panneau playlist */
 function initPlaylistPanel() {
@@ -689,13 +696,6 @@ function initPlaylistPanel() {
     });
     }
     
-    if (openPlaylistBtn && playlistPanel) {
-        openPlaylistBtn.addEventListener("click", () => {
-            // On ouvre le panneau et on notifie le body pour décaler la liste
-            playlistPanel.classList.toggle("open");
-            document.body.classList.toggle("playlist-is-open");
-        });
-    }
 
     if (closePlaylistBtn && playlistPanel) {
         closePlaylistBtn.addEventListener("click", () => {
