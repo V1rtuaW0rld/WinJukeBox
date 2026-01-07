@@ -957,9 +957,15 @@ async function showLibrary() {
     }
 }
 
-// 4. CHARGER UNE PLAYLIST ARCHIVÉE
+// 4. CHARGER UNE PLAYLIST SAUVEGARDÉE
 async function loadSavedPlaylist(id, name) {
     try {
+        // --- NOUVEAU : On éteint le shuffle avant de charger ---
+        // Cela réinitialise le bouton en haut et prévient le serveur
+        if (typeof disableShuffle === 'function') {
+            await disableShuffle();
+        }
+
         const response = await fetch('/api/playlists/load', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -967,39 +973,49 @@ async function loadSavedPlaylist(id, name) {
         });
         
         if (response.ok) {
-            document.getElementById('current-playlist-name').innerText = name;
+            // Mise à jour de l'UI et du stockage local
+            const nameElement = document.getElementById('current-playlist-name');
+            if (nameElement) nameElement.innerText = name;
             localStorage.setItem('currentPlaylistName', name);
             
+            // On recharge la liste des morceaux depuis le serveur (table playlist)
             if (typeof loadPlaylistFromServer === 'function') {
                 await loadPlaylistFromServer(); 
             }
             
+            // Message de confirmation dans le panneau central
             const mainContainer = document.getElementById('songList');
-            mainContainer.innerHTML = `
-                <div style="padding: 40px; text-align: center;">
-                    <h2 style="color: #1db954;">✅ "${name}" chargée</h2>
-                    <p style="color: #888;">Retrouvez vos titres chargés dans le volet playlist</p>
-                </div>`;
+            if (mainContainer) {
+                mainContainer.innerHTML = `
+                    <div style="padding: 40px; text-align: center;">
+                        <h2 style="color: #1db954;">✅ "${name}" chargée</h2>
+                        <p style="color: #888;">Le mode aléatoire a été désactivé pour cette nouvelle liste.</p>
+                        <p style="color: #555; font-size: 0.9rem;">Retrouvez vos titres dans le volet playlist</p>
+                    </div>`;
+            }
 
-            // --- AUTO-OUVERTURE ---
+            // --- AUTO-OUVERTURE & RAFRAÎCHISSEMENT ---
             setTimeout(() => {
                 const sidePanel = document.getElementById('playlistPanel');
-                
-                // On vérifie si le panneau est ouvert via la classe "open" (utilisée dans ton CSS)
                 const isOpen = sidePanel && sidePanel.classList.contains('open');
 
-                if (!isOpen) {
+                // Si le panneau n'est pas déjà ouvert, on l'ouvre
+                if (!isOpen && typeof togglePlaylist === 'function') {
                     togglePlaylist(); 
                 }
                 
-                showLibrary(); 
+                // On rafraîchit la bibliothèque pour mettre à jour les infos si nécessaire
+                if (typeof showLibrary === 'function') {
+                    showLibrary(); 
+                }
             }, 1000);
 
         } else {
-            alert("Erreur lors du chargement de la playlist.");
+            const errorData = await response.json();
+            alert("Erreur : " + (errorData.error || "Impossible de charger la playlist."));
         }
     } catch (err) {
-        console.error("Erreur chargement:", err);
+        console.error("Erreur critique lors du chargement:", err);
     }
 }
 
