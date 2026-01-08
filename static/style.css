@@ -60,17 +60,26 @@ body {
 }
 
 /* === ZONE DE RECHERCHE === */
+/* Le conteneur qui aligne la barre et l'icône dossier */
+.header-search-block {
+    display: flex;
+    align-items: center;
+    gap: 12px; /* Espace entre la barre et l'icône dossier */
+    width: 100%;
+}
+
+/* On s'assure que la barre de recherche prend tout l'espace disponible */
 .search-container {
     position: relative;
-    width: 100%; /* On occupe tout l'espace alloué (les 18% du header-left) */
+    flex-grow: 1; 
     display: flex;
     align-items: center;
 }
 
+/* Ton style de barre actuel (aspect pilule) */
 .header-left input {
-    width: 100%; /* La barre va jusqu'au bout à droite */
-    /* C'EST ICI : 115px de padding à droite pour laisser la place aux 3 icônes */
-    padding: 10px 100px 10px 15px; 
+    width: 100%;
+    padding: 10px 105px 10px 15px; 
     border-radius: 20px;
     border: none;
     background: #242424;
@@ -78,15 +87,36 @@ body {
     outline: none;
 }
 
+/* Groupe d'icônes internes à la barre (Titre/Artiste/Album) */
 .search-icons-group {
     position: absolute;
-    right: 10px; /* On cale le groupe à 10px du bord droit de la barre */
-    top: 50%;
-    transform: translateY(-50%);
+    right: 10px;
     display: flex;
-    gap: 10px; /* Espace entre tes 3 icônes */
-    align-items: center;
+    gap: 8px;
 }
+
+/* Style de la nouvelle icône Dossier (à droite de la barre) */
+.nav-icon-btn {
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.2s ease;
+    object-fit: contain;
+    /* On force le fond transparent si ton image a un carré blanc */
+    background: transparent; 
+}
+
+.nav-icon-btn:hover, .nav-icon-btn.active {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.nav-icon-btn.active {
+    filter: drop-shadow(0 0 5px #1db954); /* Lueur verte quand actif */
+}
+
+
 
 .search-icon-btn {
     width: 22px; /* Taille harmonieuse pour les 3 icônes */
@@ -110,6 +140,108 @@ body {
     opacity: 1;
     filter: drop-shadow(0 0 5px #1db954); /* Petite lueur verte par exemple */
 }
+
+
+/* AFFICAHGE DES FOLDER et FICHIER MP3 DANS LE BODY */
+#main-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 20px;
+}
+
+.folder-item, .file-item {
+    background: #282828;
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: center;
+    border: 1px solid #333;
+}
+
+.folder-item:hover {
+    background: #333;
+    border-color: #1db954;
+}
+
+/* Style des lignes de l'explorateur */
+.folder-card, .file-card {
+    display: flex;          /* Aligne les enfants sur une ligne */
+    align-items: center;    /* Centre verticalement l'icône et le texte */
+    gap: 15px;              /* Espace entre l'icône et le nom */
+    padding: 10px 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;        /* FORCE le curseur "main" */
+    transition: background 0.2s;
+    user-select: none;      /* Empêche la sélection de texte accidentelle */
+}
+
+.folder-card:hover, .file-card:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+/* On ajuste la taille des icônes pour qu'elles soient discrètes mais claires */
+.folder-icon {
+    font-size: 1.4rem;      /* Taille réduite pour tenir sur une ligne */
+    display: flex;
+    align-items: center;
+}
+
+.folder-name {
+    font-size: 1rem;
+    color: #e0e0e0;
+    white-space: nowrap;    /* Empêche le nom de revenir à la ligne */
+    overflow: hidden;
+    text-overflow: ellipsis; /* Coupe avec "..." si le nom est trop long */
+    cursor: pointer;        /* Assure que le curseur main est aussi sur le texte */
+}
+
+
+/* CHEMIN DE L'EXPLORATEUR */
+.folder-nav-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03); /* Fond gris très sombre neutre */
+    padding: 10px 18px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    gap: 15px;
+}
+
+.back-button-mini {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.back-button-mini:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.current-path-display {
+    /* On utilise la police par défaut du site pour plus d'harmonie */
+    font-family: inherit; 
+    font-size: 0.95rem;
+    color: #ffffff; 
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    /* Optionnel : un léger reflet pour donner du relief */
+    text-shadow: 0 0 10px rgba(30, 215, 96, 0.2);
+}
+
 
 
 

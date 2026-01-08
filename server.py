@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi import Request
+import glob
+import re
 
 # --- AJOUT: GESTION MISE EN VEILLE ---
 # Constantes Windows
@@ -51,6 +53,11 @@ current_playing_id = None
 DEVICE_ID = "auto"
 current_volume = 70
 current_playlist_name = "Playlist"
+MUSIC_FOLDER = r"\\192.168.0.3\music"
+# Variables pour la lecture de dossier (Hors BDD)
+current_folder_playlist = []  # Liste de chemins (strings)
+current_folder_index = -1     # Index actuel
+
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -217,6 +224,164 @@ def get_audio_devices():
     except Exception as e:
         print(f"Erreur audio-devices: {e}")
         return {"error": str(e), "devices": []}
+
+
+# Exploration des repertoires musicaux
+@app.get("/api/files/browse")
+def browse_files(path: str = ""):
+    # Nettoyage du path pour éviter les erreurs de concaténation
+    clean_path = path.replace("/", os.sep).lstrip(os.sep)
+    target_dir = os.path.join(MUSIC_FOLDER, clean_path)
+    
+    # Debug pour voir dans ta console Python
+    print(f"--- SCAN DOSSIER : {target_dir} ---")
+
+    if not os.path.exists(target_dir):
+        return {"error": f"Chemin introuvable : {target_dir}"}
+
+    items = []
+    try:
+        with os.scandir(target_dir) as entries:
+            for entry in entries:
+                if entry.name.startswith('.'): continue # Ignore les fichiers cachés
+                
+                is_dir = entry.is_dir()
+                if is_dir or entry.name.lower().endswith(".mp3"):
+                    items.append({
+                        "name": entry.name,
+                        "type": "directory" if is_dir else "file",
+                        # On renvoie un chemin relatif propre pour le JS
+                        "path": os.path.join(path, entry.name).replace("\\", "/")
+                    })
+        
+        items.sort(key=lambda x: (x['type'] != 'directory', x['name'].lower()))
+        return {
+            "items": items,
+            "parent_path": "/".join(path.strip("/").split("/")[:-1]) if path else ""
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+# LECTURE A TRAVERS L'EXPLORATEUR DE FICHIERS
+@app.get("/api/play_by_path")
+def play_by_path(path: str, device: str = None):
+    global current_playing_id, DEVICE_ID
+    
+    # 1. Chemins et fichiers
+    rel_path = path.lstrip("/").lstrip("\\")
+    full_path = os.path.join(MUSIC_FOLDER, rel_path)
+    current_dir = os.path.dirname(full_path)
+    
+    if not os.path.exists(full_path):
+        return {"status": "error", "message": "Fichier introuvable"}
+
+    # 2. Extraction et nettoyage des infos (regex)
+    parts = rel_path.split('/')
+    title = parts[-1].replace(".mp3", "")
+    album = parts[-2] if len(parts) > 1 else "Inconnu"
+    artist = parts[-3] if len(parts) > 2 else "Artiste local"
+
+    # Gestion du dossier "CD X" : on remonte d'un cran si nécessaire
+    if album.upper().startswith("CD") and len(parts) > 3:
+        album = parts[-3]
+        artist = parts[-4] if len(parts) > 3 else "Artiste local"
+
+    # NETTOYAGE : Suppression du pattern "AAAA - " dans l'album et "NN - " dans le titre
+    album = re.sub(r'^\d{4}\s-\s', '', album)
+    title = re.sub(r'^\d{2,}\s?[-_]\s?', '', title)
+
+    # 3. Recherche de la pochette (cover.jpg ou *.jpg)
+    def find_jpg(directory):
+        # Cherche cover.jpg d'abord, sinon le premier .jpg venu
+        files = glob.glob(os.path.join(directory, "*.jpg")) + glob.glob(os.path.join(directory, "*.JPG"))
+        if not files: return None
+        # Priorité absolue à un fichier nommé 'cover'
+        covers = [f for f in files if "cover" in os.path.basename(f).lower()]
+        return covers[0] if covers else files[0]
+
+    # Tentative 1 : Dossier courant
+    img = find_jpg(current_dir)
+    
+    # Tentative 2 : Dossier parent (si on est dans un dossier "CD X" ou profondeur 3)
+    # On peut aussi ajouter "or len(parts) > 3" si tu veux forcer la fouille au-dessus
+    if not img and (parts[-2].upper().startswith("CD") or len(parts) > 3):
+        parent_dir = os.path.dirname(current_dir)
+        img = find_jpg(parent_dir)
+
+    # Construction de l'URL pour le front-end
+    if img:
+        rel_img_path = os.path.relpath(img, MUSIC_FOLDER).replace("\\", "/")
+        cover_url = f"/api/art/{rel_img_path}" # Doit commencer par /api/art/
+    else:
+        cover_url = "/static/default_cover.png"
+
+    # 4. Lancement MPV (ton code habituel)
+    target_device = device if device else DEVICE_ID
+    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
+    time.sleep(0.4)
+    
+    args = [
+        MPV_PATH, full_path, "--no-video", "--force-window=no",
+        "--no-terminal", f"--audio-device={target_device}",
+        f"--input-ipc-server={IPC_PIPE}", f"--volume={current_volume}"
+    ]
+    subprocess.Popen(args, creationflags=0x08000000)
+
+    return {
+        "status": "playing",
+        "track_info": {
+            "title": title,
+            "artist": artist,
+            "album": album,
+            "cover_url": cover_url
+        }
+    }
+
+#Afficher les Covers d'une chanson jouée by folder
+from fastapi.responses import FileResponse
+
+# Cette route permet d'afficher une image via son chemin relatif
+@app.get("/api/art/{img_path:path}")
+async def get_album_art(img_path: str):
+    # On reconstruit le chemin complet sur le disque
+    full_path = os.path.join(MUSIC_FOLDER, img_path)
+    
+    if os.path.exists(full_path):
+        return FileResponse(full_path)
+    
+    # Fallback si l'image a disparu entre temps
+    return FileResponse("static/default_cover.png")
+
+
+# CRÉER UNE PLAYLIST FUGITIVE ou ÉPHEMERE by folder
+@app.post("/api/play_folder_now")
+async def play_folder_now(data: dict):
+    global current_folder_playlist, current_folder_index
+    folder_path = data.get('path')
+    
+    full_folder_path = os.path.join(MUSIC_FOLDER, folder_path.lstrip("/").lstrip("\\"))
+    
+    # On liste les mp3 et on trie par nom
+    files = sorted([f for f in os.listdir(full_folder_path) if f.lower().endswith(".mp3")])
+    
+    if not files:
+        return {"error": "Aucun MP3 trouvé"}
+
+    # On stocke les chemins relatifs
+    current_folder_playlist = [os.path.join(folder_path, f).replace("\\", "/") for f in files]
+    current_folder_index = 0
+    
+    # Crucial : On vide la playlist album BDD pour ne pas créer de conflit
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM playlist_album")
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "success",
+        "first_track": current_folder_playlist[0]
+    }
 
 @app.get("/play/{song_id}")
 def play_song(song_id: int, device: str = None):
@@ -594,55 +759,71 @@ from fastapi import Query
 # --- NEXT ---
 @app.get("/next")
 def get_next(current_id: int = Query(0)):
+    global current_folder_playlist, current_folder_index, shuffle_mode
+    
+    # --- 1. PRIORITÉ : MODE DOSSIER (Lecture fugitive sans BDD) ---
+    # Si la liste "fugitive" contient des chansons, on l'utilise
+    if current_folder_playlist and len(current_folder_playlist) > 0:
+        current_folder_index += 1
+        
+        if current_folder_index < len(current_folder_playlist):
+            # On renvoie le chemin du prochain fichier
+            return {"path": current_folder_playlist[current_folder_index]}
+        else:
+            # On a fini le dossier, on réinitialise tout
+            current_folder_playlist = []
+            current_folder_index = -1
+            return {"id": None, "path": None}
+
+    # --- 2. BDD : Si pas de dossier en cours, on suit la logique classique ---
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    global shuffle_mode
 
-    # --- A. ALBUM ---
-    cur.execute("SELECT position FROM playlist_album WHERE track_id = ?", (current_id,))
-    res_album = cur.fetchone()
-    if res_album:
-        cur.execute("SELECT track_id FROM playlist_album WHERE position > ? ORDER BY position ASC LIMIT 1", (res_album[0],))
-        row = cur.fetchone()
-        if row:
-            conn.close()
-            return {"id": row[0]}
-        else:
-            cur.execute("DELETE FROM playlist_album")
-            conn.commit()
-            conn.close()
-            return {"id": None}
-
-    # --- B. PLAYLIST (L'auto-réparation est ici) ---
-    if shuffle_mode:
-        # On vérifie si la table shuffle est vide (cas après un load)
-        cur.execute("SELECT COUNT(*) FROM shuffled_playlist")
-        if cur.fetchone()[0] == 0:
-            # Elle est vide : on la remplit de force avant de continuer
-            cur.execute("SELECT track_id FROM playlist")
-            ids = [r[0] for r in cur.fetchall()]
-            if ids:
-                import random
-                random.shuffle(ids)
-                for i, tid in enumerate(ids):
-                    cur.execute("INSERT INTO shuffled_playlist (track_id, position) VALUES (?, ?)", (tid, i))
+    try:
+        # A. Vérification de la Playlist Album (Lecture d'un album BDD)
+        cur.execute("SELECT position FROM playlist_album WHERE track_id = ?", (current_id,))
+        res_album = cur.fetchone()
+        
+        if res_album:
+            cur.execute("SELECT track_id FROM playlist_album WHERE position > ? ORDER BY position ASC LIMIT 1", (res_album[0],))
+            row = cur.fetchone()
+            if row:
+                return {"id": row[0]}
+            else:
+                # Fin de l'album BDD, on nettoie la table
+                cur.execute("DELETE FROM playlist_album")
                 conn.commit()
+                return {"id": None}
 
-    # On choisit la table
-    table = "shuffled_playlist" if shuffle_mode else "playlist"
+        # B. Vérification du Mode Shuffle (Auto-réparation)
+        if shuffle_mode:
+            cur.execute("SELECT COUNT(*) FROM shuffled_playlist")
+            if cur.fetchone()[0] == 0:
+                cur.execute("SELECT track_id FROM playlist")
+                ids = [r[0] for r in cur.fetchall()]
+                if ids:
+                    import random
+                    random.shuffle(ids)
+                    for i, tid in enumerate(ids):
+                        cur.execute("INSERT INTO shuffled_playlist (track_id, position) VALUES (?, ?)", (tid, i))
+                    conn.commit()
 
-    cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
-    res = cur.fetchone()
+        # C. Lecture de la Playlist standard (ou Shuffled)
+        table = "shuffled_playlist" if shuffle_mode else "playlist"
+        cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
+        res = cur.fetchone()
 
-    if res:
-        cur.execute(f"SELECT track_id FROM {table} WHERE position > ? ORDER BY position ASC LIMIT 1", (res[0],))
-    else:
-        # Si morceau non trouvé (changement de playlist), on prend le premier de la table active
-        cur.execute(f"SELECT track_id FROM {table} ORDER BY position ASC LIMIT 1")
-    
-    row = cur.fetchone()
-    conn.close()
-    return {"id": row[0] if row else None}
+        if res:
+            cur.execute(f"SELECT track_id FROM {table} WHERE position > ? ORDER BY position ASC LIMIT 1", (res[0],))
+        else:
+            # Si l'ID actuel n'est pas dans la playlist, on repart du début
+            cur.execute(f"SELECT track_id FROM {table} ORDER BY position ASC LIMIT 1")
+        
+        row = cur.fetchone()
+        return {"id": row[0] if row else None}
+
+    finally:
+        conn.close()
 
 # --- PREVIOUS ---
 @app.get("/previous")
