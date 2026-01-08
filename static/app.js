@@ -436,8 +436,6 @@ async function updateStatus() {
             const elArtist = document.getElementById("trackArtist");
             const elAlbum = document.getElementById("trackAlbum");
             
-            // On vérifie si le texte affiché correspond au morceau réel
-            // Si ça diffère, on force la mise à jour des textes
             if (elTitle && elTitle.innerText !== data.track.title) {
                 elTitle.innerText = data.track.title || "---";
                 if (elArtist) elArtist.innerText = data.track.artist || "---";
@@ -445,59 +443,44 @@ async function updateStatus() {
             }
 
             // MISE À JOUR DE L'AMBIANCE VISUELLE (Image)
-if (data.track && data.track.id !== currentTrackId) {
-    const elHeader = document.querySelector(".jukebox-header");
-    const elCover = document.getElementById("current-cover");
-    const nextSrc = `/cover/${data.track.id}?t=${new Date().getTime()}`;
+            if (data.track && data.track.id !== currentTrackId) {
+                const elHeader = document.querySelector(".jukebox-header");
+                const elCover = document.getElementById("current-cover");
+                const nextSrc = `/cover/${data.track.id}?t=${new Date().getTime()}`;
 
-    // On crée un testeur d'image "fantôme"
-    const imgTester = new Image();
-    imgTester.src = nextSrc;
+                const imgTester = new Image();
+                imgTester.src = nextSrc;
 
-    // CAS 1 : L'image existe et charge avec succès
-    imgTester.onload = () => {
-        const urlFormat = `url("${nextSrc}")`;
-        document.body.style.backgroundImage = urlFormat;
-        if (elHeader) elHeader.style.backgroundImage = urlFormat;
-        if (elCover) {
-            elCover.style.display = "block";
-            elCover.src = nextSrc;
-        }
-    };
+                imgTester.onload = () => {
+                    const urlFormat = `url("${nextSrc}")`;
+                    document.body.style.backgroundImage = urlFormat;
+                    if (elHeader) elHeader.style.backgroundImage = urlFormat;
+                    if (elCover) {
+                        elCover.style.display = "block";
+                        elCover.src = nextSrc;
+                    }
+                };
 
-    // CAS 2 : L'image est absente (Erreur 404 ou 500)
-    imgTester.onerror = () => {
-        console.log("Pochette absente pour ce titre, passage en mode neutre.");
-        // Au lieu d'une image, on met un dégradé stylé pour le fond
-        const neutralBg = "linear-gradient(135deg, #121212 0%, #282828 100%)";
-        
-        document.body.style.backgroundImage = neutralBg;
-        if (elHeader) elHeader.style.backgroundImage = neutralBg;
-        
-        if (elCover) {
-            // On cache la balise image cassée pour ne pas voir l'icône "image brisée"
-            elCover.style.display = "none"; 
-        }
-    };
-
-    currentTrackId = data.track.id;
-}
+                imgTester.onerror = () => {
+                    const neutralBg = "linear-gradient(135deg, #121212 0%, #282828 100%)";
+                    document.body.style.backgroundImage = neutralBg;
+                    if (elHeader) elHeader.style.backgroundImage = neutralBg;
+                    if (elCover) elCover.style.display = "none"; 
+                };
+                currentTrackId = data.track.id;
+            }
         }
 
-        /// --- 2. GESTION DU HIGHLIGHT (PLAYLIST + BODY) ---
-// On sélectionne TOUS les types de lignes de morceaux possibles
-const allItems = document.querySelectorAll(".playlist-item, .song-item, .album-track-item");
-
-allItems.forEach(item => {
-    // On compare l'ID stocké dans 'data-id' avec l'ID renvoyé par le serveur
-    const isCurrent = (data.track && Number(item.dataset.id) === data.track.id);
-    item.classList.toggle("playing-now", isCurrent);
-});
+        // --- 2. GESTION DU HIGHLIGHT ---
+        const allItems = document.querySelectorAll(".playlist-item, .song-item, .album-track-item");
+        allItems.forEach(item => {
+            const isCurrent = (data.track && Number(item.dataset.id) === data.track.id);
+            item.classList.toggle("playing-now", isCurrent);
+        });
 
         // --- 3. BARRE DE PROGRESSION & TEMPS ---
         const currentTxt = document.getElementById("currentTime");
         const totalTxt = document.getElementById("totalTime");
-        
         if (!slider) slider = document.getElementById("progressSlider");
 
         if (slider) {
@@ -514,26 +497,39 @@ allItems.forEach(item => {
         // --- 4. ÉTAT DU BOUTON PAUSE ---
         const btn = document.getElementById("pauseBtn");
         if (btn) {
-         // Si data.paused est vrai, la musique est arrêtée : on affiche "Play"
-        if (data.paused) {
-        btn.classList.add("paused");
-        btn.classList.remove("playing");
-        } 
-        // Sinon, la musique joue : on affiche "Pause"
-        else {
-        btn.classList.add("playing");
-        btn.classList.remove("paused");
+            if (data.paused) {
+                btn.classList.add("paused");
+                btn.classList.remove("playing");
+            } else {
+                btn.classList.add("playing");
+                btn.classList.remove("paused");
+            }
         }
 
         // --- 5. SYNCHRO DU SLIDER VOLUME ---
-        const volSlider = document.getElementById("volumeSlider"); // Vérifie bien cet ID dans ton HTML
+        const volSlider = document.getElementById("volumeSlider");
         if (volSlider && !isDraggingVolume) {
-        // Si le serveur nous renvoie le volume dans le status
-        if (data.volume !== undefined) {
-        volSlider.value = data.volume;
+            if (data.volume !== undefined) {
+                volSlider.value = data.volume;
+            }
         }
+
+        // --- 6. SYNCHRO PLAYLIST (NOM + CONTENU) ---
+        const nameElement = document.getElementById('current-playlist-name');
+        if (nameElement && data.playlist_name) {
+            // Si le nom du serveur diffère du nom affiché
+            if (nameElement.innerText !== data.playlist_name) {
+                nameElement.innerText = data.playlist_name;
+                
+                // On met aussi à jour le stockage local pour le prochain F5
+                localStorage.setItem('currentPlaylistName', data.playlist_name);
+                
+                // On force le rechargement de la liste des morceaux
+                if (typeof loadPlaylistFromServer === 'function') {
+                    loadPlaylistFromServer();
+                }
+            }
         }
-}
 
     } catch (err) {
         console.error("Erreur updateStatus:", err);

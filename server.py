@@ -50,6 +50,7 @@ shuffle_mode = False
 current_playing_id = None
 DEVICE_ID = "auto"
 current_volume = 70
+current_playlist_name = "Playlist"
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -289,7 +290,7 @@ def set_position(position: int):
 
 @app.get("/status")
 def get_status():
-    global current_playing_id
+    global current_playing_id, current_volume, current_playlist_name
     pos = read_mpv_property("time-pos") or 0
     duration = read_mpv_property("duration") or 0
     paused = read_mpv_property("pause") or False
@@ -298,14 +299,13 @@ def get_status():
     if current_playing_id:
         conn = sqlite3.connect(DB_NAME)
         cur = conn.cursor()
-        # On s'assure de bien récupérer l'ID pour construire l'URL de la cover
         cur.execute("SELECT id, title, artist, album FROM tracks WHERE id = ?", (current_playing_id,))
         res = cur.fetchone()
         conn.close()
         
         if res:
             track_info = {
-                "id": int(res[0]),  # On force en INT pour le JS
+                "id": int(res[0]),
                 "title": res[1], 
                 "artist": res[2], 
                 "album": res[3],
@@ -317,7 +317,8 @@ def get_status():
         "duration": duration, 
         "paused": paused, 
         "track": track_info,
-        "volume": current_volume
+        "volume": current_volume,
+        "playlist_name": current_playlist_name # Info distribuée à tous les clients
     }
 # --- LIRE un ALBUM en entier ---
 # Version FastAPI (à utiliser si tu as "from fastapi import ...")
@@ -486,7 +487,7 @@ def list_saved_playlists():
 
 @app.post("/api/playlists/load")
 async def load_saved_playlist(data: dict):
-    global shuffle_mode  # <--- CRUCIAL pour modifier la variable globale
+    global shuffle_mode, current_playlist_name  # Mise à jour des deux globales
     playlist_id = data.get("id")
     if not playlist_id:
         return {"error": "ID de playlist manquant"}
@@ -494,10 +495,16 @@ async def load_saved_playlist(data: dict):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
+        # 0. Récupérer le nom de la playlist pour la synchro
+        c.execute("SELECT name FROM saved_playlists_info WHERE id = ?", (playlist_id,))
+        res_name = c.fetchone()
+        if res_name:
+            current_playlist_name = res_name[0]
+
         # 1. On vide TOUT pour repartir à neuf
         c.execute("DELETE FROM playlist")
         c.execute("DELETE FROM shuffled_playlist")
-        c.execute("DELETE FROM playlist_album") # <--- Ajouté : évite les conflits de priorité
+        c.execute("DELETE FROM playlist_album")
         
         # 2. On désactive le mode shuffle côté serveur
         shuffle_mode = False 
