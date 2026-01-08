@@ -963,8 +963,8 @@ async function showLibrary() {
                         <h3 style="margin: 0 0 10px 0; color: #1db954;">${pl.name}</h3>
                         <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">${pl.count} morceaux</p>
                         <div style="display: flex; gap: 10px;">
-                            <button onclick="loadSavedPlaylist(${pl.id}, '${pl.name.replace(/'/g, "\\'")}')" style="background: #1db954; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; color: black; font-weight: bold;">Charger</button>
-                            <button onclick="deleteSavedPlaylist(${pl.id})" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Supprimer</button>
+                           <button onclick="loadSavedPlaylist(${pl.id}, '${pl.name.replace(/'/g, "\\'")}')" style="background: #1db954; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;"><img src="/static/icons/load.png" style="height:16px; vertical-align:middle;"></button>
+                           <button onclick="deleteSavedPlaylist(${pl.id})" style="background: transparent; border: 1px solid #ff4444; color: #ff4444; padding: 5px 10px; border-radius: 4px; cursor: pointer;"><img src="/static/icons/close.png" style="height:16px; vertical-align:middle;"></button>
                         </div>
                     </div>
                 `;
