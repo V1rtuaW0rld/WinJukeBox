@@ -105,49 +105,57 @@ app.add_middleware(
 )
 
 async def monitor_sleep_loop():
-    """Surveille la veille et enchaîne les chansons automatiquement"""
-    global last_music_time, current_playing_id
+    """Surveille la veille et enchaîne les chansons avec sécurité NAS"""
+    global last_music_time, current_playing_id, current_folder_playlist
     print("--- Surveillance Veille & Auto-Next activée ---")
     
     while True:
-        # 1. On récupère l'état de MPV
-        # pos sera un nombre si ça joue, ou None si MPV est fermé
+        # 1. État actuel de MPV
         pos = read_mpv_property("time-pos")
         is_paused = read_mpv_property("pause")
         current_time = time.time()
 
-        # --- PARTIE 1 : GESTION DE LA VEILLE ---
-        # On considère que la musique joue si MPV est ouvert ET pas en pause
+        # --- GESTION DE LA VEILLE ---
         is_playing = (pos is not None and is_paused is False)
-
         if is_playing:
             last_music_time = current_time
-            set_keep_awake(True) # Interdire la veille
+            set_keep_awake(True)
         else:
-            # Si musique arrêtée, on attend le délai de 5 min (TIMEOUT_DELAY)
             if (current_time - last_music_time) < TIMEOUT_DELAY:
                 set_keep_awake(True)
             else:
-                set_keep_awake(False) # Autoriser la veille
+                set_keep_awake(False)
 
-        # --- PARTIE 2 : ENCHAÎNEMENT AUTOMATIQUE (AUTO-NEXT) ---
-        # Si pos est None, cela veut dire que MPV s'est arrêté (chanson finie)
-        # Mais current_playing_id nous dit qu'une chanson était censée jouer
-        if pos is None and current_playing_id is not None:
-            print(f"Chanson finie. Recherche de la suivante après l'ID {current_playing_id}...")
+        # --- ENCHAÎNEMENT AUTOMATIQUE (AUTO-NEXT) ---
+        # On ne déclenche l'enchaînement que si MPV est vide (pos is None)
+        # ET qu'on attendait activement une musique (ID ou Dossier)
+        if pos is None and (current_playing_id is not None or current_folder_playlist):
             
-            # On appelle la logique de ta route /next pour trouver l'ID suivant
-            next_song = get_next(current_playing_id)
-            next_id = next_song.get("id")
-
-            if next_id:
-                print(f"Enchaînement auto vers ID: {next_id}")
-                play_song(next_id) # On lance la lecture de la suivante
+            # SÉCURITÉ CRITIQUE : On attend 3 secondes et on re-vérifie
+            # Cela laisse au NAS le temps de répondre avant de conclure que c'est fini
+            await asyncio.sleep(3)
+            pos_recheck = read_mpv_property("time-pos")
+            
+            if pos_recheck is None:
+                print(f"Chanson finie réellement. Passage à la suivante...")
+                
+                # Récupération via ta logique get_next (BDD ou Dossier)
+                next_song = get_next(current_playing_id if current_playing_id else 0)
+                
+                if next_song.get("path"):
+                    print(f"Enchaînement auto (Dossier) -> {next_song['path']}")
+                    play_by_path(next_song["path"])
+                elif next_song.get("id"):
+                    print(f"Enchaînement auto (BDD) -> ID {next_song['id']}")
+                    play_song(next_song["id"])
+                else:
+                    print("Fin de playlist ou erreur.")
+                    current_playing_id = None
             else:
-                print("Fin de la playlist ou aucune chanson suivante trouvée.")
-                current_playing_id = None # On remet à zéro pour ne pas boucler dans le vide
+                # Le NAS était juste lent : MPV a fini par charger pendant l'attente
+                print("Fausse alerte : Le fichier a fini par charger sur le NAS.")
 
-        # On vérifie toutes les 5 secondes (plus réactif pour l'enchaînement)
+        # On vérifie toutes les 5 secondes
         await asyncio.sleep(5)
 
 # --- ROUTES ---
@@ -383,23 +391,43 @@ async def play_folder_now(data: dict):
         "first_track": current_folder_playlist[0]
     }
 
+def force_kill_mpv():
+    """S'assure que mpv est mort et enterré avant de continuer."""
+    # On lance le kill
+    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
+    
+    # On vérifie activement la liste des processus (max 1 seconde d'attente)
+    max_attempts = 10
+    while max_attempts > 0:
+        check = subprocess.run('tasklist /FI "IMAGENAME eq mpv.exe"', capture_output=True, text=True, shell=True)
+        if "mpv.exe" not in check.stdout:
+            break
+        time.sleep(0.1)
+        max_attempts -= 1
+    
+    # Petit délai de grâce final pour que le driver audio se libère
+    time.sleep(0.4)
+
+
 @app.get("/play/{song_id}")
 def play_song(song_id: int, device: str = None):
     """Lance la lecture d'un morceau sur un périphérique spécifique."""
-    global current_playing_id, DEVICE_ID
+    global current_playing_id, DEVICE_ID, current_folder_playlist, current_volume
     
-    # 1. Mise à jour de l'état global
+    # --- AJOUT SÉCURITÉ : Nettoyage radical ---
+    # On appelle la fonction qui attend la fin réelle du processus
+    force_kill_mpv()
+
+    # 3. Mise à jour de l'état global
     current_playing_id = song_id
+    # Crucial : si on lance une musique BDD, on vide la playlist "dossier" pour le moniteur
+    current_folder_playlist = [] 
     
-    # 2. Détermination du périphérique (Priorité au paramètre URL, sinon global)
+    # 4. Détermination du périphérique (Priorité au paramètre URL, sinon global)
     # On utilise 'device' s'il est fourni, sinon la variable DEVICE_ID
     target_device = device if device else DEVICE_ID
 
-    # 3. Arrêt propre des instances précédentes
-    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
-    time.sleep(0.4) # Temps de latence pour libérer le fichier et le driver audio
-
-    # 4. Recherche du fichier en BDD
+    # 5. Recherche du fichier en BDD
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute("SELECT path FROM tracks WHERE id = ?", (song_id,))
@@ -416,12 +444,17 @@ def play_song(song_id: int, device: str = None):
             "--no-terminal",
             f"--audio-device={target_device}",
             f"--input-ipc-server={IPC_PIPE}",
-            f"--volume={current_volume}" # On utilise la variable mémorisée ici !
+            f"--volume={current_volume}" # On utilise ta variable mémorisée
         ]
 
-        # 5. Lancement de MPV (sans fenêtre terminale)
+        # 6. Lancement de MPV (sans fenêtre terminale avec le flag 0x08000000)
         subprocess.Popen(args, creationflags=0x08000000)
-        return {"status": "playing", "device_used": target_device}
+        
+        return {
+            "status": "playing", 
+            "device_used": target_device,
+            "song_id": song_id
+        }
     
     return {"status": "error", "message": "Song not found"}
 
