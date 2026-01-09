@@ -52,6 +52,7 @@ DEVICE_ID = "auto"
 current_volume = 70
 current_playlist_name = "Playlist"
 playlist_library_version = 0
+playlist_active_version = 0
 
 
 def run_mpv_command(command_list):
@@ -506,9 +507,19 @@ def get_playlist_library_version():
     return {"version": playlist_library_version}
 
 
+def bump_playlist_active_version():
+    global playlist_active_version
+    playlist_active_version += 1
+
+@app.get("/api/playlist/version")
+def get_playlist_active_version():
+    return {"version": playlist_active_version}
+
+
 # --- PLAYLIST ---
 @app.post("/playlist/add/{track_id}")
 def add_to_playlist(track_id: int):
+    global current_playlist_name
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
@@ -516,12 +527,29 @@ def add_to_playlist(track_id: int):
     cur.execute("SELECT COALESCE(MAX(position), 0) + 1 FROM playlist")
     pos = cur.fetchone()[0]
 
-    # Insérer seulement track_id + position
+    # Insérer dans la playlist active
     cur.execute("INSERT INTO playlist (track_id, position) VALUES (?, ?)", (track_id, pos))
-    conn.commit()
 
+    # 🔥 AJOUT : si une playlist est active, on insère aussi dans saved_playlists_content
+    cur.execute("SELECT id FROM saved_playlists_info WHERE name = ?", (current_playlist_name,))
+    row = cur.fetchone()
+    if row:
+        playlist_id = row[0]
+        cur.execute("""
+            INSERT INTO saved_playlists_content (playlist_id, track_id, position)
+            VALUES (?, ?, ?)
+        """, (playlist_id, track_id, pos))
+
+    conn.commit()
     conn.close()
+
+    # 🔥 Synchro immédiate
+    bump_playlist_library_version()
+    bump_playlist_active_version()
+
+
     return {"status": "added"}
+
 
 
 @app.get("/playlist")
@@ -578,25 +606,25 @@ async def create_new_playlist_db(request: Request):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
-        # 1. On crée l'entrée dans la bibliothèque immédiatement
-        # Si elle existe déjà, on récupère juste l'ID, sinon on l'insère
         c.execute("INSERT OR IGNORE INTO saved_playlists_info (name) VALUES (?)", (name,))
         c.execute("SELECT id FROM saved_playlists_info WHERE name = ?", (name,))
         playlist_id = c.fetchone()[0]
 
-        # 2. On vide la file d'attente actuelle (la table 'playlist') 
-        # car on "switche" sur une nouvelle playlist vide
         c.execute("DELETE FROM playlist")
-        
-        # 3. Mise à jour de la variable globale
+
         current_playlist_name = name
         
         conn.commit()
+
+        # 🔥 Synchro immédiate
+        bump_playlist_library_version()
+
         return {"status": "success", "id": playlist_id, "name": name}
     except Exception as e:
         return {"error": str(e)}
     finally:
         conn.close()
+
 
 @app.post('/api/playlists/save')
 async def save_playlist(request: Request):
@@ -703,11 +731,14 @@ async def load_saved_playlist(data: dict):
         """, (playlist_id,))
 
         conn.commit()
+        bump_playlist_active_version()
         return {"status": "success"}
     except Exception as e:
+        bump_playlist_active_version()
         return {"error": str(e)}
     finally:
         conn.close()
+
 
 @app.delete("/api/playlists/{playlist_id}")
 def delete_saved_playlist(playlist_id: int):
@@ -726,6 +757,36 @@ def delete_saved_playlist(playlist_id: int):
 
     finally:
         conn.close()
+
+
+
+@app.delete("/playlist/remove/{track_id}")
+def remove_from_playlist(track_id: int):
+    global current_playlist_name
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    # Supprimer dans la playlist active
+    cur.execute("DELETE FROM playlist WHERE track_id = ?", (track_id,))
+
+    # 🔥 Supprimer aussi dans la sauvegarde si une playlist est active
+    cur.execute("SELECT id FROM saved_playlists_info WHERE name = ?", (current_playlist_name,))
+    row = cur.fetchone()
+    if row:
+        playlist_id = row[0]
+        cur.execute("DELETE FROM saved_playlists_content WHERE playlist_id = ? AND track_id = ?", (playlist_id, track_id))
+
+    conn.commit()
+    conn.close()
+
+    # 🔥 Synchro immédiate
+    bump_playlist_library_version()
+    bump_playlist_active_version()
+
+    return {"status": "removed"}
+
+
+
 
 
 # --- SHUFFLE ---

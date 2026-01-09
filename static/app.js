@@ -442,6 +442,36 @@ async function checkPlaylistLibraryVersion() {
     }
 }
 
+// --- SYNCHRO AUTOMATIQUE DU VOLET DE PLAYLISTS ---
+
+let lastPlaylistVersion = 0;
+
+async function checkPlaylistUpdate() {
+    try {
+        const res = await fetch("/api/playlist/version");
+        const data = await res.json();
+
+        if (data.version !== lastPlaylistVersion) {
+            lastPlaylistVersion = data.version;
+
+            // Si le volet playlist est ouvert, on le rafraîchit
+            const panel = document.getElementById('playlistPanel');
+            if (panel && panel.classList.contains('open')) {
+                if (typeof loadPlaylistFromServer === 'function') {
+                    loadPlaylistFromServer();
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Erreur synchro playlist:", e);
+    }
+}
+
+setInterval(checkPlaylistUpdate, 1500);
+
+
+
+
 // Vérification toutes les 2 secondes
 setInterval(checkPlaylistLibraryVersion, 2000);
 
