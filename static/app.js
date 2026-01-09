@@ -428,19 +428,23 @@ async function checkPlaylistLibraryVersion() {
         const res = await fetch("/api/playlists/version");
         const data = await res.json();
 
-        if (data.version !== lastPlaylistLibraryVersion) {
-            lastPlaylistLibraryVersion = data.version;
+        // Rien à faire si la version n'a pas changé
+        if (data.version === lastPlaylistLibraryVersion) return;
+        lastPlaylistLibraryVersion = data.version;
 
-            // Si la bibliothèque est actuellement affichée, on la rafraîchit
-            const mainContainer = document.getElementById('songList');
-            if (mainContainer && mainContainer.dataset.view === "library") {
-                showLibrary();
-            }
+        // Rafraîchir uniquement si la vue actuelle EST la bibliothèque
+        const mainContainer = document.getElementById("songList");
+        const isLibraryView = mainContainer?.dataset.view === "library";
+
+        if (isLibraryView && typeof showLibrary === "function") {
+            showLibrary();
         }
+
     } catch (err) {
-        console.error("Erreur synchro bibliothèque:", err);
+        console.error("Erreur synchro bibliothèque :", err);
     }
 }
+
 
 // --- SYNCHRO AUTOMATIQUE DU VOLET DE PLAYLISTS ---
 
@@ -955,65 +959,28 @@ async function createNewPlaylist() {
     }
 }
 
-// 2. SAUVEGARDER (Bouton Disquette) - Action Silencieuse & Enrichissement
+// 2. SAUVEGARDER (Bouton Disquette) - Version silencieuse
 async function promptSavePlaylist() {
     const nameElement = document.getElementById('current-playlist-name');
-    const currentName = nameElement.innerText;
+    const name = nameElement.innerText.trim();
 
-    // Protection : on ne fait rien si le message de succès est déjà affiché
-    if (currentName.includes("✓") || currentName.includes("⚠️")) return;
-
-    let name = currentName;
-    
-    // Si le nom est générique ou vide, on demande une fois via prompt
-    if (name === "Playlist" || name === "") {
-        name = prompt("Sous quel nom enregistrer cette playlist ?");
-        if (!name || name.trim() === "") return;
-        nameElement.innerText = name; // On met à jour l'affichage
-    }
+    if (!name) return; // sécurité
 
     try {
-        const response = await fetch('/api/playlists/save', {
+        await fetch('/api/playlists/save', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ name: name })
+            body: JSON.stringify({ name })
         });
 
-        const result = await response.json();
+        // 🔇 Mode silencieux : aucune modification d'UI, aucun showLibrary()
+        // On laisse la synchro multi-device faire son travail en arrière-plan.
 
-        if (response.ok) {
-            // --- SUCCÈS : FLASH VERT ---
-            const originalColor = nameElement.style.color;
-            nameElement.style.color = "#1db954"; 
-            nameElement.innerText = "✓ Enregistré !";
-            
-            // 1. On rafraîchit la bibliothèque automatiquement
-            // Cela permet de voir la nouvelle playlist dans la liste sans cliquer
-            // Un délai de 200ms peut parfois aider la base de données à "respirer"
-            setTimeout(() => {
-                showLibrary(); 
-            }, 200);             
-
-            setTimeout(() => {
-                nameElement.style.color = originalColor;
-                nameElement.innerText = name;
-            }, 1000);
-
-        } else {
-            // --- ERREUR : FLASH ROUGE ---
-            const originalColor = nameElement.style.color;
-            nameElement.style.color = "#ff4444";
-            nameElement.innerText = "⚠️ " + (result.error || "Erreur");
-            
-            setTimeout(() => {
-                nameElement.style.color = originalColor;
-                nameElement.innerText = name;
-            }, 3000);
-        }
     } catch (err) {
         console.error("Erreur réseau sauvegarde:", err);
     }
 }
+
 
 // 3. AFFICHER LA BIBLIOTHÈQUE (Panneau central)
 async function showLibrary() {

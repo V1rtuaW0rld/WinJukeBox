@@ -569,18 +569,6 @@ def get_playlist():
 
     return {"songs": [{"id": s[0], "title": s[1], "artist": s[2]} for s in songs]}
 
-
-@app.delete("/playlist/remove/{track_id}")
-def remove_from_playlist(track_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM playlist WHERE track_id = ?", (track_id,))
-    conn.commit()
-    conn.close()
-
-    return {"status": "removed"}
-
 # --- VIDER la PLAYLIST ---
 @app.delete("/playlist/clear")
 def clear_playlist():
