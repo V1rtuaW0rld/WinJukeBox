@@ -51,6 +51,8 @@ current_playing_id = None
 DEVICE_ID = "auto"
 current_volume = 70
 current_playlist_name = "Playlist"
+playlist_library_version = 0
+
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -492,6 +494,18 @@ async def play_album_now(data: dict): # data: dict est nécessaire pour FastAPI
     finally:
         conn.close()
 
+
+# Fonction pour incrémenter la version de la bibliothèque de playlists
+# Elle va permettre de forcer le rafraîchissement côté client
+def bump_playlist_library_version():
+    global playlist_library_version
+    playlist_library_version += 1
+
+@app.get("/api/playlists/version")
+def get_playlist_library_version():
+    return {"version": playlist_library_version}
+
+
 # --- PLAYLIST ---
 @app.post("/playlist/add/{track_id}")
 def add_to_playlist(track_id: int):
@@ -585,8 +599,8 @@ async def create_new_playlist_db(request: Request):
         conn.close()
 
 @app.post('/api/playlists/save')
-async def save_playlist(request: Request): # On ajoute 'request' ici
-    data = await request.json() # Avec FastAPI, on utilise 'await request.json()'
+async def save_playlist(request: Request):
+    data = await request.json()
     name = data.get('name')
     
     if not name:
@@ -601,14 +615,14 @@ async def save_playlist(request: Request): # On ajoute 'request' ici
 
         if row:
             playlist_id = row[0]
-            # Supprimer l'ancien contenu pour cette playlist (Enrichissement)
+            # Supprimer l'ancien contenu
             c.execute("DELETE FROM saved_playlists_content WHERE playlist_id = ?", (playlist_id,))
         else:
             # Créer une nouvelle entrée
             c.execute("INSERT INTO saved_playlists_info (name) VALUES (?)", (name,))
             playlist_id = c.lastrowid
 
-        # 2. Récupérer les morceaux de la file d'attente actuelle (table 'playlist')
+        # 2. Récupérer les morceaux de la file d'attente actuelle
         c.execute("SELECT track_id, position FROM playlist ORDER BY position")
         current_tracks = c.fetchall()
 
@@ -620,6 +634,10 @@ async def save_playlist(request: Request): # On ajoute 'request' ici
             """, (playlist_id, track[0], track[1]))
 
         conn.commit()
+
+        # 🔥 AJOUT : notifier tous les devices
+        bump_playlist_library_version()
+
         return {"status": "success", "message": "Playlist enregistrée"}
 
     except Exception as e:
@@ -627,6 +645,7 @@ async def save_playlist(request: Request): # On ajoute 'request' ici
         return {"error": str(e)}
     finally:
         conn.close()
+
 
 @app.get("/api/playlists")
 def list_saved_playlists():
@@ -699,9 +718,15 @@ def delete_saved_playlist(playlist_id: int):
         c = conn.cursor()
         c.execute("DELETE FROM saved_playlists_info WHERE id = ?", (playlist_id,))
         conn.commit()
+
+        # 🔥 AJOUT : notifier tous les devices que la grille a changé
+        bump_playlist_library_version()
+
         return {"status": "deleted"}
+
     finally:
         conn.close()
+
 
 # --- SHUFFLE ---
 # ACTIVER

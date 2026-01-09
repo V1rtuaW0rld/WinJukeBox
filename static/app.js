@@ -419,6 +419,35 @@ function initVolumeControl() {
     });
 }
 
+
+// --- SYNCHRO AUTOMATIQUE DE LA BIBLIOTHÈQUE DE PLAYLISTS ---
+let lastPlaylistLibraryVersion = 0;
+
+async function checkPlaylistLibraryVersion() {
+    try {
+        const res = await fetch("/api/playlists/version");
+        const data = await res.json();
+
+        if (data.version !== lastPlaylistLibraryVersion) {
+            lastPlaylistLibraryVersion = data.version;
+
+            // Si la bibliothèque est actuellement affichée, on la rafraîchit
+            const mainContainer = document.getElementById('songList');
+            if (mainContainer && mainContainer.dataset.view === "library") {
+                showLibrary();
+            }
+        }
+    } catch (err) {
+        console.error("Erreur synchro bibliothèque:", err);
+    }
+}
+
+// Vérification toutes les 2 secondes
+setInterval(checkPlaylistLibraryVersion, 2000);
+
+
+
+
 /**
  * ---------------------------------------------------------
  * SYNCHRONISATION AVEC MPV & AFFICHAGE INFOS BDD
@@ -962,8 +991,12 @@ async function showLibrary() {
         const response = await fetch('/api/playlists');
         const data = await response.json();
         const mainContainer = document.getElementById('songList');
+
+        // 🔥 AJOUT ICI
+        mainContainer.dataset.view = "library";
         
         let html = `
+
     <div style="padding: 20px;">
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
             <div class="header-btn-pill" style="cursor: default;">
