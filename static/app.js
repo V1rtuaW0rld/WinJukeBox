@@ -215,196 +215,6 @@ async function addFullAlbum(albumName, artistName) {
         console.error("Erreur lors de l'ajout groupé :", err);
     }
 }
-
-/**
- * ---------------------------------------------------------
- * Passer en mode arborescence des dossiers
- * ---------------------------------------------------------
- */
-
-function toggleFolderView() {
-    console.log("Tentative de basculement vers la vue dossier...");
-    const btn = document.querySelector('.nav-icon-btn');
-    
-    if (!btn) {
-        console.error("ERREUR : L'icône .nav-icon-btn est introuvable dans le DOM");
-        return;
-    }
-
-    btn.classList.toggle('active');
-    const isFolderMode = btn.classList.contains('active');
-
-    if (isFolderMode) {
-        console.log("Mode dossier : ON. Appel de loadFolderContent...");
-        loadFolderContent(""); 
-    } else {
-        console.log("Mode dossier : OFF. Retour à la recherche.");
-        if (typeof doSearch === 'function') doSearch(); 
-    }
-}
-
-async function loadFolderContent(path = "") {
-    console.log("Appel API pour le chemin :", path);
-    const container = document.getElementById("songList"); 
-    
-    if (!container) {
-        console.error("ERREUR : Le conteneur #songList est introuvable !");
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/files/browse?path=${encodeURIComponent(path)}`);
-        const data = await response.json();
-
-        if (data.error) {
-            container.innerHTML = `<div style="color:red; padding:20px;">Erreur : ${data.error}</div>`;
-            return;
-        }
-
-        container.innerHTML = ""; // On vide la grille
-
-        // 1. Barre de navigation (Retour + Chemin + Bouton Tout Lire)
-        if (path !== "" && path !== ".") {
-            const navBar = document.createElement("div");
-            navBar.className = "folder-nav-bar"; 
-            
-            const breadcrumb = path ? path.split('/').join(' <span style="color: #666; margin: 0 8px;">〉</span> ') : "";
-
-            navBar.innerHTML = `
-                <div class="back-button-mini" title="Retour au dossier parent" style="cursor:pointer;">
-                    <span style="color: #1db954; font-size: 1.2em;">▲</span>
-                </div>
-                <div class="current-path-display" style="flex-grow: 1; margin-left: 15px;">
-                    ${breadcrumb}
-                </div>
-                <button class="play-all-folder" title="Lire tout le dossier" 
-                        style="background: rgba(29, 185, 84, 0.1); border: 1px solid #1db954; color: #1db954; cursor: pointer; border-radius: 20px; padding: 4px 12px; display: flex; align-items: center; gap: 8px; font-weight: bold; transition: 0.2s;">
-                    <span style="font-size: 1.1em;">+</span> TOUT LIRE
-                </button>
-            `;
-            
-            // Clic sur "Retour"
-            navBar.querySelector('.back-button-mini').onclick = () => loadFolderContent(data.parent_path || "");
-            
-            // Clic sur "Tout Lire"
-            navBar.querySelector('.play-all-folder').onclick = () => {
-                if (typeof playWholeFolder === 'function') {
-                    playWholeFolder(path);
-                } else {
-                    console.error("La fonction playWholeFolder n'est pas encore définie.");
-                }
-            };
-            
-            container.appendChild(navBar);
-        }
-
-        // 2. Affichage des dossiers et fichiers
-        data.items.forEach(item => {
-            const div = document.createElement("div");
-            div.className = item.type === "directory" ? "folder-card" : "file-card";
-
-            if (item.type === "directory") {
-                div.innerHTML = `
-                    <div class="folder-icon">📁</div>
-                    <div class="folder-name">${item.name}</div>
-                `;
-                div.onclick = () => loadFolderContent(item.path);
-            } else {
-                div.innerHTML = `
-                    <div class="file-info" style="display:flex; align-items:center; flex-grow:1;">
-                        <div class="folder-icon">🎵</div>
-                        <div class="folder-name">${item.name}</div>
-                    </div>
-                    <button class="play-btn" title="Lire maintenant">▶</button>
-                `;
-                
-                const playBtn = div.querySelector('.play-btn');
-                playBtn.onclick = (e) => {
-                    e.stopPropagation(); 
-                    playFileByPath(item.path);
-                };
-            }
-            container.appendChild(div);
-        });
-
-    } catch (err) {
-        console.error("Erreur navigation dossiers:", err);
-    }
-}
-
-
-/* Gestion de lecture d'un dossier entier */
-let currentFolderPlaylist = [];
-let currentFolderIndex = 0;
-
-async function playWholeFolder(path) {
-    try {
-        console.log("Tentative de lecture du dossier :", path);
-        const response = await fetch('/api/play_folder_now', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ path: path })
-        });
-        
-        const data = await response.json();
-
-        if (data.status === "success" && data.first_track) {
-            console.log("Dossier prêt. Premier morceau :", data.first_track);
-            // On appelle la fonction de lecture par chemin
-            playFileByPath(data.first_track);
-        } else {
-            alert("Erreur lors de la lecture du dossier : " + (data.error || "Inconnu"));
-        }
-    } catch (err) {
-        console.error("Erreur playWholeFolder :", err);
-    }
-}
-
-
-// Fonction indépendante pour appeler l'API de lecture
-async function playFileByPath(path) {
-    try {
-        const response = await fetch(`/api/play_by_path?path=${encodeURIComponent(path)}`);
-        const result = await response.json();
-        
-        if (result.status === "playing" && result.track_info) {
-            const info = result.track_info;
-            
-            // Mise à jour visuelle du Header
-            if(document.getElementById("trackTitle")) 
-                document.getElementById("trackTitle").textContent = info.title;
-            
-            if(document.getElementById("trackArtist")) 
-                document.getElementById("trackArtist").textContent = info.artist;
-                
-            if(document.getElementById("trackAlbum")) 
-                document.getElementById("trackAlbum").textContent = info.album;
-
-            // Mise à jour de la pochette
-            const coverImg = document.getElementById("current-cover");
-            if(coverImg) {
-                // IMPORTANT : On utilise info.cover_url tel quel !
-                // Ne pas mettre de "/api/files/raw/" devant.
-                coverImg.src = info.cover_url; 
-
-                // Mise à jour du fond flou (Ambiance)
-                document.body.style.backgroundImage = `url('${info.cover_url}')`;
-                const header = document.querySelector('.jukebox-header');
-                if(header) {
-                    header.style.backgroundImage = `url('${info.cover_url}')`;
-                }
-
-                coverImg.onerror = () => {
-                    coverImg.src = "/static/default_cover.png";
-                    document.body.style.backgroundImage = "none";
-                };
-            }
-        }
-    } catch (err) {
-        console.error("Erreur lecture par chemin:", err);
-    }
-}
-
 /**
  * ---------------------------------------------------------
  * COMMANDES SERVEUR & GESTION AUDIO DYNAMIQUE
@@ -452,29 +262,18 @@ async function seek(seconds) {
 }
 
 async function playNext() {
+    // On repasse à un appel simple pour que les logs réapparaissent
     const res = await fetch(`/next?current_id=${currentTrackId || 0}`);
     const data = await res.json();
-    
-    if (data.path) {
-        // Mode Explorateur : on utilise le chemin du fichier
-        playFileByPath(data.path);
-    } else if (data.id) {
-        // Mode BDD : on utilise l'ID (ta fonction play habituelle)
-        play(data.id); 
-    } else {
-        console.log("Fin de la liste de lecture.");
+    if (data.id) {
+        play(data.id);
     }
 }
 
 async function playPrevious() {
     const res = await fetch(`/previous?current_id=${currentTrackId || 0}`);
     const data = await res.json();
-    
-    if (data.path) {
-        // Mode Explorateur
-        playFileByPath(data.path);
-    } else if (data.id) {
-        // Mode BDD
+    if (data.id) {
         play(data.id);
     }
 }
@@ -625,6 +424,8 @@ function initVolumeControl() {
  * SYNCHRONISATION AVEC MPV & AFFICHAGE INFOS BDD
  * ---------------------------------------------------------
  */
+let lastLibraryCount = 0;
+
 async function updateStatus() {
     try {
         const response = await fetch(`/status`);
@@ -730,6 +531,15 @@ async function updateStatus() {
                     loadPlaylistFromServer();
                 }
             }
+        }
+
+        // --- 7. SYNCHRO BIBLIOTHÈQUE ---
+        const libraryMarker = document.getElementById('library-marker');
+        
+        // Si le marqueur est là, on balance les données à la fonction
+        // C'est elle qui décidera si elle doit redessiner ou non grâce à l'empreinte
+        if (libraryMarker && data.library) {
+            renderLibraryUI(data.library);
         }
 
     } catch (err) {
@@ -1044,35 +854,45 @@ async function toggleShuffle() {
 // --- GESTION DES PLAYLISTS SAUVEGARDÉES ---
 // 1. CRÉER UNE NOUVELLE PLAYLIST (Bouton +) - VERSION DIRECTE
 async function createNewPlaylist() {
-    // On passe directement à la question du nom (plus de confirm "Voulez-vous...")
     const name = prompt("Nom de votre nouvelle playlist :", "Ma Playlist");
-    
-    // Si l'utilisateur clique sur "Annuler" ou ne met rien, on arrête proprement
     if (!name || name.trim() === "") return;
 
     try {
-        // A. On vide la playlist temporaire sur le serveur pour partir de zéro
-        await fetch("/playlist/clear", { method: "DELETE" });
+        // Appeler la création réelle sur le serveur
+        const response = await fetch("/api/playlists/create", {
+            method: "POST",
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name: name })
+        });
+        const result = await response.json();
 
-        // B. On met à jour l'interface avec le nouveau nom
-        document.getElementById('current-playlist-name').innerText = name;
-        localStorage.setItem('currentPlaylistName', name);
-        
-        // C. On rafraîchit le volet de droite (il sera vide, prêt à être rempli)
-        if (typeof loadPlaylistFromServer === 'function') {
-            await loadPlaylistFromServer();
+        if (result.status === "success") {
+            // 1. Mettre à jour le titre affiché immédiatement
+            const nameElement = document.getElementById('current-playlist-name');
+            if (nameElement) nameElement.innerText = name;
+            
+            localStorage.setItem('currentPlaylistName', name);
+
+            // 2. Vider visuellement la liste de droite
+            if (typeof loadPlaylistFromServer === 'function') {
+                await loadPlaylistFromServer();
+            }
+
+            // 3. Rafraîchir la bibliothèque (si ouverte) pour voir la nouvelle playlist vide
+            if (typeof showLibrary === 'function') {
+                showLibrary();
+            }
+
+            // Message de succès
+            const mainContainer = document.getElementById('songList');
+            mainContainer.innerHTML = `
+                <div style="padding: 40px; text-align: center;">
+                    <h2 style="color: #1db954;">✨ Playlist "${name}" prête</h2>
+                    <p style="color: #888;">Elle est actuellement vide. Ajoutez des titres !</p>
+                </div>`;
         }
-
-        // Notification visuelle dans le panneau central
-        const mainContainer = document.getElementById('songList');
-        mainContainer.innerHTML = `
-            <div style="padding: 40px; text-align: center;">
-                <h2 style="color: #1db954;">✨ Mode création : "${name}"</h2>
-                <p style="color: #888;">Ajoutez vos morceaux, puis cliquez sur la disquette pour sauvegarder.</p>
-            </div>`;
-
     } catch (err) {
-        console.error("Erreur lors de la création :", err);
+        console.error("Erreur création playlist:", err);
     }
 }
 
@@ -1250,7 +1070,36 @@ async function deleteSavedPlaylist(id) {
     }
 }
 
+// Rendre le panneau bibliothèque dynamique (synchro sur tous les devices)
+function renderLibraryUI(playlists) {
+    const mainContainer = document.getElementById('songList');
+    if (!mainContainer) return;
 
+    let cardsHtml = '';
+    playlists.forEach(pl => {
+        const safeName = pl.name.replace(/'/g, "\\'");
+        cardsHtml += `
+            <div class="playlist-card" style="background: #181818; padding: 20px; border-radius: 10px; border: 1px solid #333;">
+                <h3 style="margin: 0 0 10px 0; color: #1db954;">${pl.name}</h3>
+                <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">${pl.count} morceaux</p>
+                <div style="display: flex; gap: 10px;">
+                   <button onclick="loadSavedPlaylist(${pl.id}, '${safeName}')" class="btn-action-green">
+                        <img src="/static/icons/load.png" style="height:16px;">
+                   </button>
+                   <button onclick="deleteSavedPlaylist(${pl.id})" class="btn-action-red">
+                        <img src="/static/icons/close.png" style="height:16px;">
+                   </button>
+                </div>
+            </div>`;
+    });
+
+    mainContainer.innerHTML = `
+        <div id="library-marker" style="padding: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
+                ${cardsHtml}
+            </div>
+        </div>`;
+}
 
 /**
  * ---------------------------------------------------------

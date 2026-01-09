@@ -26,28 +26,24 @@
             </div>
         </div>
       
-                <div class="header-left">
-            <div class="header-search-block">
-                <div class="search-container">
-                    <input type="text" id="searchInput" placeholder="Rechercher titre..." oninput="doSearch()">
-                    <div class="search-icons-group">
-                        <img src="/static/icons/title.png" class="search-icon-btn" onclick="setSearchMode('title')" title="Titre">
-                        <img src="/static/icons/artist.png" class="search-icon-btn" onclick="setSearchMode('artist')" title="Artiste">
-                        <img src="/static/icons/album.png" class="search-icon-btn" onclick="setSearchMode('album')" title="Album">
-                    </div>
+        <div class="header-left">
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Rechercher titre..." oninput="doSearch()">
+                <div class="search-icons-group">
+                    <img src="/static/icons/title.png" class="search-icon-btn" onclick="setSearchMode('title')" title="Rechercher par titre">
+                    <img src="/static/icons/artist.png" class="search-icon-btn" onclick="setSearchMode('artist')" title="Rechercher par artiste">
+                    <img src="/static/icons/album.png" class="search-icon-btn" onclick="setSearchMode('album')" title="Rechercher par album">
                 </div>
-                
-                <img src="/static/icons/file.png" class="nav-icon-btn" onclick="toggleFolderView()" title="Explorateur de fichiers">
             </div>
         </div>
 
         <div class="header-controls">
             <div class="player-controls">
-                <button onclick="playPrevious()" id="prevBtn" title="Précédent"></button>
+                <button id="prevBtn" title="Précédent"></button>
                 <button onclick="seek(-10)" id="rewindBtn" title="Reculer 10s"></button>
                 <button onclick="togglePause()" id="pauseBtn" title="Lecture/Pause"></button>
                 <button onclick="seek(10)" id="forwardBtn" title="Avancer 10s"></button>
-                <button onclick="playNext()" id="nextBtn" title="Suivant"></button>
+                <button id="nextBtn" title="Suivant"></button>
             </div>
         </div>
         <div class="header-playlist">

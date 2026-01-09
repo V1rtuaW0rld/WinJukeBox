@@ -14,8 +14,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi import Request
-import glob
-import re
 
 # --- AJOUT: GESTION MISE EN VEILLE ---
 # Constantes Windows
@@ -53,11 +51,6 @@ current_playing_id = None
 DEVICE_ID = "auto"
 current_volume = 70
 current_playlist_name = "Playlist"
-MUSIC_FOLDER = r"\\192.168.0.3\music"
-# Variables pour la lecture de dossier (Hors BDD)
-current_folder_playlist = []  # Liste de chemins (strings)
-current_folder_index = -1     # Index actuel
-
 
 def run_mpv_command(command_list):
     """Envoie une commande JSON à MPV via le Pipe Windows"""
@@ -104,59 +97,153 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+#Gestion des previous
+def handle_previous(current_id):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    global shuffle_mode
+
+    try:
+        # --- 1. TEST PRIORITÉ ALBUM ---
+        cur.execute("SELECT position FROM playlist_album WHERE track_id = ?", (current_id,))
+        res_album = cur.fetchone()
+
+        if res_album:
+            cur.execute("""
+                SELECT track_id FROM playlist_album 
+                WHERE position < ? 
+                ORDER BY position DESC LIMIT 1
+            """, (res_album[0],))
+            prev_album_row = cur.fetchone()
+            return {"id": prev_album_row[0] if prev_album_row else None}
+
+        # --- 2. LOGIQUE PLAYLIST ---
+        table = "shuffled_playlist" if shuffle_mode else "playlist"
+
+        # Sécurité : Si ID inconnu ou nul
+        if current_id == 0:
+            cur.execute(f"SELECT track_id FROM {table} ORDER BY position DESC LIMIT 1")
+            row = cur.fetchone()
+            return {"id": row[0] if row else None}
+
+        # Trouver la position actuelle
+        cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
+        res = cur.fetchone()
+
+        # Si l'ID n'est pas dans la table (changement de playlist)
+        if not res:
+            cur.execute(f"SELECT track_id FROM {table} ORDER BY position DESC LIMIT 1")
+            row = cur.fetchone()
+            return {"id": row[0] if row else None}
+
+        # Trouver la précédente
+        cur.execute(f"SELECT track_id FROM {table} WHERE position < ? ORDER BY position DESC LIMIT 1", (res[0],))
+        prev_row = cur.fetchone()
+        
+        return {"id": prev_row[0] if prev_row else None}
+
+    finally:
+        conn.close()
+
+
+#Gestion des NEXT pour assurer les enchainements automatiques
+def handle_next(current_id):
+    """
+    Logique unique pour trouver le morceau suivant, 
+    utilisée par le bouton 'Next' ET par l'enchaînement automatique.
+    """
+    global shuffle_mode
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    
+    try:
+        # --- 1. PRIORITÉ ALBUM (Si on est en train d'écouter un album précis) ---
+        cur.execute("SELECT position FROM playlist_album WHERE track_id = ?", (current_id,))
+        res_album = cur.fetchone()
+        if res_album:
+            cur.execute("SELECT track_id FROM playlist_album WHERE position > ? ORDER BY position ASC LIMIT 1", (res_album[0],))
+            row = cur.fetchone()
+            if row:
+                return {"id": row[0]}
+            else:
+                cur.execute("DELETE FROM playlist_album")
+                conn.commit()
+                return {"id": None}
+
+        # --- 2. GESTION DU SHUFFLE (Auto-réparation) ---
+        if shuffle_mode:
+            cur.execute("SELECT COUNT(*) FROM shuffled_playlist")
+            if cur.fetchone()[0] == 0:
+                cur.execute("SELECT track_id FROM playlist")
+                ids = [r[0] for r in cur.fetchall()]
+                if ids:
+                    import random
+                    random.shuffle(ids)
+                    for i, tid in enumerate(ids):
+                        cur.execute("INSERT INTO shuffled_playlist (track_id, position) VALUES (?, ?)", (tid, i))
+                    conn.commit()
+
+        # --- 3. CHOIX DE LA TABLE (Normal ou Shuffle) ---
+        table = "shuffled_playlist" if shuffle_mode else "playlist"
+
+        cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
+        res = cur.fetchone()
+
+        if res:
+            # On cherche le suivant
+            cur.execute(f"SELECT track_id FROM {table} WHERE position > ? ORDER BY position ASC LIMIT 1", (res[0],))
+        else:
+            # Si non trouvé (ex: changement de playlist en cours), on prend le premier
+            cur.execute(f"SELECT track_id FROM {table} ORDER BY position ASC LIMIT 1")
+        
+        row = cur.fetchone()
+        return {"id": row[0] if row else None}
+
+    except Exception as e:
+        print(f"Erreur handle_next: {e}")
+        return {"id": None}
+    finally:
+        conn.close()
+
+
 async def monitor_sleep_loop():
-    """Surveille la veille et enchaîne les chansons avec sécurité NAS"""
-    global last_music_time, current_playing_id, current_folder_playlist
-    print("--- Surveillance Veille & Auto-Next activée ---")
+    global last_music_time, current_playing_id
+    print("--- Surveillance Veille & Auto-Next Active ---")
     
     while True:
-        # 1. État actuel de MPV
+        # 1. Capture d'état unique
         pos = read_mpv_property("time-pos")
         is_paused = read_mpv_property("pause")
         current_time = time.time()
 
-        # --- GESTION DE LA VEILLE ---
-        is_playing = (pos is not None and is_paused is False)
+        # 2. Gestion de la veille (Keep Awake) - Condensée
+        is_playing = (pos is not None and not is_paused)
         if is_playing:
             last_music_time = current_time
             set_keep_awake(True)
         else:
-            if (current_time - last_music_time) < TIMEOUT_DELAY:
-                set_keep_awake(True)
-            else:
-                set_keep_awake(False)
+            # Reste éveillé si on est encore dans le délai de grâce
+            set_keep_awake((current_time - last_music_time) < TIMEOUT_DELAY)
 
-        # --- ENCHAÎNEMENT AUTOMATIQUE (AUTO-NEXT) ---
-        # On ne déclenche l'enchaînement que si MPV est vide (pos is None)
-        # ET qu'on attendait activement une musique (ID ou Dossier)
-        if pos is None and (current_playing_id is not None or current_folder_playlist):
+        # 3. Enchaînement Automatique (Auto-Next)
+        if pos is None and current_playing_id is not None:
+            await asyncio.sleep(2) # Sécurité NAS plus courte
             
-            # SÉCURITÉ CRITIQUE : On attend 3 secondes et on re-vérifie
-            # Cela laisse au NAS le temps de répondre avant de conclure que c'est fini
-            await asyncio.sleep(3)
-            pos_recheck = read_mpv_property("time-pos")
-            
-            if pos_recheck is None:
-                print(f"Chanson finie réellement. Passage à la suivante...")
+            if read_mpv_property("time-pos") is None:
+                print(f"Fin de piste ID: {current_playing_id}")
                 
-                # Récupération via ta logique get_next (BDD ou Dossier)
-                next_song = get_next(current_playing_id if current_playing_id else 0)
+                # C'est ici que la magie opère via la fonction qu'on a créée
+                next_data = handle_next(current_playing_id)
                 
-                if next_song.get("path"):
-                    print(f"Enchaînement auto (Dossier) -> {next_song['path']}")
-                    play_by_path(next_song["path"])
-                elif next_song.get("id"):
-                    print(f"Enchaînement auto (BDD) -> ID {next_song['id']}")
-                    play_song(next_song["id"])
+                if next_data and next_data.get("id"):
+                    print(f"Enchaînement -> {next_data['id']}")
+                    play_song(next_data["id"]) 
                 else:
-                    print("Fin de playlist ou erreur.")
+                    print("Fin de playlist.")
                     current_playing_id = None
-            else:
-                # Le NAS était juste lent : MPV a fini par charger pendant l'attente
-                print("Fausse alerte : Le fichier a fini par charger sur le NAS.")
 
-        # On vérifie toutes les 5 secondes
-        await asyncio.sleep(5)
+        # 4. Fréquence de rafraîchissement (2s = plus réactif que 5s)
+        await asyncio.sleep(2)
 
 # --- ROUTES ---
 
@@ -233,164 +320,6 @@ def get_audio_devices():
         print(f"Erreur audio-devices: {e}")
         return {"error": str(e), "devices": []}
 
-
-# Exploration des repertoires musicaux
-@app.get("/api/files/browse")
-def browse_files(path: str = ""):
-    # Nettoyage du path pour éviter les erreurs de concaténation
-    clean_path = path.replace("/", os.sep).lstrip(os.sep)
-    target_dir = os.path.join(MUSIC_FOLDER, clean_path)
-    
-    # Debug pour voir dans ta console Python
-    print(f"--- SCAN DOSSIER : {target_dir} ---")
-
-    if not os.path.exists(target_dir):
-        return {"error": f"Chemin introuvable : {target_dir}"}
-
-    items = []
-    try:
-        with os.scandir(target_dir) as entries:
-            for entry in entries:
-                if entry.name.startswith('.'): continue # Ignore les fichiers cachés
-                
-                is_dir = entry.is_dir()
-                if is_dir or entry.name.lower().endswith(".mp3"):
-                    items.append({
-                        "name": entry.name,
-                        "type": "directory" if is_dir else "file",
-                        # On renvoie un chemin relatif propre pour le JS
-                        "path": os.path.join(path, entry.name).replace("\\", "/")
-                    })
-        
-        items.sort(key=lambda x: (x['type'] != 'directory', x['name'].lower()))
-        return {
-            "items": items,
-            "parent_path": "/".join(path.strip("/").split("/")[:-1]) if path else ""
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-# LECTURE A TRAVERS L'EXPLORATEUR DE FICHIERS
-@app.get("/api/play_by_path")
-def play_by_path(path: str, device: str = None):
-    global current_playing_id, DEVICE_ID
-    
-    # 1. Chemins et fichiers
-    rel_path = path.lstrip("/").lstrip("\\")
-    full_path = os.path.join(MUSIC_FOLDER, rel_path)
-    current_dir = os.path.dirname(full_path)
-    
-    if not os.path.exists(full_path):
-        return {"status": "error", "message": "Fichier introuvable"}
-
-    # 2. Extraction et nettoyage des infos (regex)
-    parts = rel_path.split('/')
-    title = parts[-1].replace(".mp3", "")
-    album = parts[-2] if len(parts) > 1 else "Inconnu"
-    artist = parts[-3] if len(parts) > 2 else "Artiste local"
-
-    # Gestion du dossier "CD X" : on remonte d'un cran si nécessaire
-    if album.upper().startswith("CD") and len(parts) > 3:
-        album = parts[-3]
-        artist = parts[-4] if len(parts) > 3 else "Artiste local"
-
-    # NETTOYAGE : Suppression du pattern "AAAA - " dans l'album et "NN - " dans le titre
-    album = re.sub(r'^\d{4}\s-\s', '', album)
-    title = re.sub(r'^\d{2,}\s?[-_]\s?', '', title)
-
-    # 3. Recherche de la pochette (cover.jpg ou *.jpg)
-    def find_jpg(directory):
-        # Cherche cover.jpg d'abord, sinon le premier .jpg venu
-        files = glob.glob(os.path.join(directory, "*.jpg")) + glob.glob(os.path.join(directory, "*.JPG"))
-        if not files: return None
-        # Priorité absolue à un fichier nommé 'cover'
-        covers = [f for f in files if "cover" in os.path.basename(f).lower()]
-        return covers[0] if covers else files[0]
-
-    # Tentative 1 : Dossier courant
-    img = find_jpg(current_dir)
-    
-    # Tentative 2 : Dossier parent (si on est dans un dossier "CD X" ou profondeur 3)
-    # On peut aussi ajouter "or len(parts) > 3" si tu veux forcer la fouille au-dessus
-    if not img and (parts[-2].upper().startswith("CD") or len(parts) > 3):
-        parent_dir = os.path.dirname(current_dir)
-        img = find_jpg(parent_dir)
-
-    # Construction de l'URL pour le front-end
-    if img:
-        rel_img_path = os.path.relpath(img, MUSIC_FOLDER).replace("\\", "/")
-        cover_url = f"/api/art/{rel_img_path}" # Doit commencer par /api/art/
-    else:
-        cover_url = "/static/default_cover.png"
-
-    # 4. Lancement MPV (ton code habituel)
-    target_device = device if device else DEVICE_ID
-    subprocess.run("taskkill /F /IM mpv.exe /T >nul 2>&1 || exit 0", shell=True)
-    time.sleep(0.4)
-    
-    args = [
-        MPV_PATH, full_path, "--no-video", "--force-window=no",
-        "--no-terminal", f"--audio-device={target_device}",
-        f"--input-ipc-server={IPC_PIPE}", f"--volume={current_volume}"
-    ]
-    subprocess.Popen(args, creationflags=0x08000000)
-
-    return {
-        "status": "playing",
-        "track_info": {
-            "title": title,
-            "artist": artist,
-            "album": album,
-            "cover_url": cover_url
-        }
-    }
-
-#Afficher les Covers d'une chanson jouée by folder
-from fastapi.responses import FileResponse
-
-# Cette route permet d'afficher une image via son chemin relatif
-@app.get("/api/art/{img_path:path}")
-async def get_album_art(img_path: str):
-    # On reconstruit le chemin complet sur le disque
-    full_path = os.path.join(MUSIC_FOLDER, img_path)
-    
-    if os.path.exists(full_path):
-        return FileResponse(full_path)
-    
-    # Fallback si l'image a disparu entre temps
-    return FileResponse("static/default_cover.png")
-
-
-# CRÉER UNE PLAYLIST FUGITIVE ou ÉPHEMERE by folder
-@app.post("/api/play_folder_now")
-async def play_folder_now(data: dict):
-    global current_folder_playlist, current_folder_index
-    folder_path = data.get('path')
-    
-    full_folder_path = os.path.join(MUSIC_FOLDER, folder_path.lstrip("/").lstrip("\\"))
-    
-    # On liste les mp3 et on trie par nom
-    files = sorted([f for f in os.listdir(full_folder_path) if f.lower().endswith(".mp3")])
-    
-    if not files:
-        return {"error": "Aucun MP3 trouvé"}
-
-    # On stocke les chemins relatifs
-    current_folder_playlist = [os.path.join(folder_path, f).replace("\\", "/") for f in files]
-    current_folder_index = 0
-    
-    # Crucial : On vide la playlist album BDD pour ne pas créer de conflit
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute("DELETE FROM playlist_album")
-    conn.commit()
-    conn.close()
-
-    return {
-        "status": "success",
-        "first_track": current_folder_playlist[0]
-    }
-
 def force_kill_mpv():
     """S'assure que mpv est mort et enterré avant de continuer."""
     # On lance le kill
@@ -412,22 +341,19 @@ def force_kill_mpv():
 @app.get("/play/{song_id}")
 def play_song(song_id: int, device: str = None):
     """Lance la lecture d'un morceau sur un périphérique spécifique."""
-    global current_playing_id, DEVICE_ID, current_folder_playlist, current_volume
+    global current_playing_id, DEVICE_ID, current_volume
     
-    # --- AJOUT SÉCURITÉ : Nettoyage radical ---
-    # On appelle la fonction qui attend la fin réelle du processus
-    force_kill_mpv()
+    # 1. ARRÊT PROPRE ET RADICAL (Sécurité anti-chevauchement)
+    # On utilise la fonction qui attend que MPV soit vraiment fermé
+    force_kill_mpv() 
 
-    # 3. Mise à jour de l'état global
+    # 2. Mise à jour de l'état global
     current_playing_id = song_id
-    # Crucial : si on lance une musique BDD, on vide la playlist "dossier" pour le moniteur
-    current_folder_playlist = [] 
     
-    # 4. Détermination du périphérique (Priorité au paramètre URL, sinon global)
-    # On utilise 'device' s'il est fourni, sinon la variable DEVICE_ID
+    # 3. Détermination du périphérique
     target_device = device if device else DEVICE_ID
 
-    # 5. Recherche du fichier en BDD
+    # 4. Recherche du fichier en BDD
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute("SELECT path FROM tracks WHERE id = ?", (song_id,))
@@ -444,17 +370,14 @@ def play_song(song_id: int, device: str = None):
             "--no-terminal",
             f"--audio-device={target_device}",
             f"--input-ipc-server={IPC_PIPE}",
-            f"--volume={current_volume}" # On utilise ta variable mémorisée
+            f"--volume={current_volume}"
         ]
 
-        # 6. Lancement de MPV (sans fenêtre terminale avec le flag 0x08000000)
+        # 5. Lancement de MPV (sans fenêtre terminale)
+        # On utilise 0x08000000 pour éviter l'ouverture d'une console CMD
         subprocess.Popen(args, creationflags=0x08000000)
         
-        return {
-            "status": "playing", 
-            "device_used": target_device,
-            "song_id": song_id
-        }
+        return {"status": "playing", "device_used": target_device}
     
     return {"status": "error", "message": "Song not found"}
 
@@ -493,22 +416,33 @@ def get_status():
     duration = read_mpv_property("duration") or 0
     paused = read_mpv_property("pause") or False
     
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    # 1. Infos du morceau actuel
     track_info = None
     if current_playing_id:
-        conn = sqlite3.connect(DB_NAME)
-        cur = conn.cursor()
         cur.execute("SELECT id, title, artist, album FROM tracks WHERE id = ?", (current_playing_id,))
         res = cur.fetchone()
-        conn.close()
-        
         if res:
             track_info = {
-                "id": int(res[0]),
-                "title": res[1], 
-                "artist": res[2], 
-                "album": res[3],
-                "cover_url": f"/cover/{res[0]}" 
+                "id": int(res[0]), "title": res[1], "artist": res[2], 
+                "album": res[3], "cover_url": f"/cover/{res[0]}" 
             }
+
+    # 2. RÉCUPÉRATION DE LA BIBLIOTHÈQUE (Synchronisation)
+    cur.execute("""
+        SELECT info.id, info.name, COUNT(content.id)
+        FROM saved_playlists_info info
+        LEFT JOIN saved_playlists_content content ON info.id = content.playlist_id
+        GROUP BY info.id
+        ORDER BY info.created_at DESC
+    """)
+    playlists_data = [
+        {"id": r[0], "name": r[1], "count": r[2]} for r in cur.fetchall()
+    ]
+    
+    conn.close()
 
     return {
         "pos": pos, 
@@ -516,8 +450,10 @@ def get_status():
         "paused": paused, 
         "track": track_info,
         "volume": current_volume,
-        "playlist_name": current_playlist_name # Info distribuée à tous les clients
+        "playlist_name": current_playlist_name,
+        "library": playlists_data  # La liste envoyée à tous les clients
     }
+
 # --- LIRE un ALBUM en entier ---
 # Version FastAPI (à utiliser si tu as "from fastapi import ...")
 @app.post("/api/play_album_now")
@@ -616,6 +552,37 @@ def clear_playlist():
 
 
 # --- GESTION DES PLAYLISTS SAUVEGARDÉES ---
+@app.post("/api/playlists/create")
+async def create_new_playlist_db(request: Request):
+    global current_playlist_name
+    data = await request.json()
+    name = data.get('name')
+    
+    if not name:
+        return {"error": "Nom manquant"}
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        # 1. On crée l'entrée dans la bibliothèque immédiatement
+        # Si elle existe déjà, on récupère juste l'ID, sinon on l'insère
+        c.execute("INSERT OR IGNORE INTO saved_playlists_info (name) VALUES (?)", (name,))
+        c.execute("SELECT id FROM saved_playlists_info WHERE name = ?", (name,))
+        playlist_id = c.fetchone()[0]
+
+        # 2. On vide la file d'attente actuelle (la table 'playlist') 
+        # car on "switche" sur une nouvelle playlist vide
+        c.execute("DELETE FROM playlist")
+        
+        # 3. Mise à jour de la variable globale
+        current_playlist_name = name
+        
+        conn.commit()
+        return {"status": "success", "id": playlist_id, "name": name}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        conn.close()
 
 @app.post('/api/playlists/save')
 async def save_playlist(request: Request): # On ajoute 'request' ici
@@ -792,136 +759,13 @@ from fastapi import Query
 # --- NEXT ---
 @app.get("/next")
 def get_next(current_id: int = Query(0)):
-    global current_folder_playlist, current_folder_index, shuffle_mode
-    
-    # --- 1. PRIORITÉ : MODE DOSSIER (Lecture fugitive sans BDD) ---
-    # Si la liste "fugitive" contient des chansons, on l'utilise
-    if current_folder_playlist and len(current_folder_playlist) > 0:
-        current_folder_index += 1
-        
-        if current_folder_index < len(current_folder_playlist):
-            # On renvoie le chemin du prochain fichier
-            return {"path": current_folder_playlist[current_folder_index]}
-        else:
-            # On a fini le dossier, on réinitialise tout
-            current_folder_playlist = []
-            current_folder_index = -1
-            return {"id": None, "path": None}
-
-    # --- 2. BDD : Si pas de dossier en cours, on suit la logique classique ---
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-
-    try:
-        # A. Vérification de la Playlist Album (Lecture d'un album BDD)
-        cur.execute("SELECT position FROM playlist_album WHERE track_id = ?", (current_id,))
-        res_album = cur.fetchone()
-        
-        if res_album:
-            cur.execute("SELECT track_id FROM playlist_album WHERE position > ? ORDER BY position ASC LIMIT 1", (res_album[0],))
-            row = cur.fetchone()
-            if row:
-                return {"id": row[0]}
-            else:
-                # Fin de l'album BDD, on nettoie la table
-                cur.execute("DELETE FROM playlist_album")
-                conn.commit()
-                return {"id": None}
-
-        # B. Vérification du Mode Shuffle (Auto-réparation)
-        if shuffle_mode:
-            cur.execute("SELECT COUNT(*) FROM shuffled_playlist")
-            if cur.fetchone()[0] == 0:
-                cur.execute("SELECT track_id FROM playlist")
-                ids = [r[0] for r in cur.fetchall()]
-                if ids:
-                    import random
-                    random.shuffle(ids)
-                    for i, tid in enumerate(ids):
-                        cur.execute("INSERT INTO shuffled_playlist (track_id, position) VALUES (?, ?)", (tid, i))
-                    conn.commit()
-
-        # C. Lecture de la Playlist standard (ou Shuffled)
-        table = "shuffled_playlist" if shuffle_mode else "playlist"
-        cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
-        res = cur.fetchone()
-
-        if res:
-            cur.execute(f"SELECT track_id FROM {table} WHERE position > ? ORDER BY position ASC LIMIT 1", (res[0],))
-        else:
-            # Si l'ID actuel n'est pas dans la playlist, on repart du début
-            cur.execute(f"SELECT track_id FROM {table} ORDER BY position ASC LIMIT 1")
-        
-        row = cur.fetchone()
-        return {"id": row[0] if row else None}
-
-    finally:
-        conn.close()
+    # On utilise la fonction centralisée
+    return handle_next(current_id)
 
 # --- PREVIOUS ---
 @app.get("/previous")
 def get_previous(current_id: int = Query(0)):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    global shuffle_mode
-
-    # --- 1. TEST PRIORITÉ ALBUM ---
-    cur.execute("SELECT position FROM playlist_album WHERE track_id = ?", (current_id,))
-    res_album = cur.fetchone()
-
-    if res_album:
-        current_pos_album = res_album[0]
-        cur.execute("""
-            SELECT track_id FROM playlist_album 
-            WHERE position < ? 
-            ORDER BY position DESC LIMIT 1
-        """, (current_pos_album,))
-        prev_album_row = cur.fetchone()
-        
-        if prev_album_row:
-            conn.close()
-            return {"id": prev_album_row[0]}
-        
-        # Début de l'album : on reste sur le premier titre (ou None pour arrêter)
-        conn.close()
-        return {"id": None}
-
-    # --- 2. LOGIQUE PLAYLIST ---
-    table = "shuffled_playlist" if shuffle_mode else "playlist"
-
-    # Si aucune chanson en cours ou ID non trouvé dans la table actuelle
-    if current_id == 0:
-        cur.execute(f"SELECT track_id FROM {table} ORDER BY position DESC LIMIT 1")
-        row = cur.fetchone()
-        conn.close()
-        return {"id": row[0] if row else None}
-
-    # Trouver la position actuelle dans la playlist
-    cur.execute(f"SELECT position FROM {table} WHERE track_id = ?", (current_id,))
-    res = cur.fetchone()
-
-    # --- AJOUT SÉCURITÉ : Si on a changé de playlist et que l'ID n'existe plus ici ---
-    if not res:
-        # On renvoie le dernier morceau de la NOUVELLE playlist au lieu de bloquer
-        cur.execute(f"SELECT track_id FROM {table} ORDER BY position DESC LIMIT 1")
-        row = cur.fetchone()
-        conn.close()
-        return {"id": row[0] if row else None}
-
-    current_pos = res[0]
-
-    # Trouver la précédente dans la playlist
-    cur.execute(f"""
-        SELECT track_id FROM {table}
-        WHERE position < ?
-        ORDER BY position DESC
-        LIMIT 1
-    """, (current_pos,))
-    
-    prev_row = cur.fetchone()
-    conn.close()
-
-    return {"id": prev_row[0] if prev_row else None}
+    return handle_previous(current_id)
 
 @app.post("/api/clear_album_table")
 def clear_album_table():
